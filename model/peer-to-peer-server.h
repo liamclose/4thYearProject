@@ -50,7 +50,8 @@ protected:
   virtual void DoDispose (void);
 
 private:
-  Ptr<Packet> CreateReplyPacket(int size);
+  Ptr<Packet> CreateReplyPacket(uint8_t* bytes, int size);
+  int ParseAction(uint8_t* message);
   void Reply(ns3::Address from, ns3::Ptr<Packet> pckt);
   virtual void StartApplication (void);
   virtual void StopApplication (void);

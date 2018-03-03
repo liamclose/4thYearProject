@@ -84,23 +84,63 @@ P2PServer::GetReceived (void) const
   return m_received;
 }
 
-void
-P2PServer::DoDispose (void)
-{
-  NS_LOG_FUNCTION (this);
-  Application::DoDispose ();
-}
+  void P2PServer::DoDispose (void) {
+    NS_LOG_FUNCTION (this);
+    Application::DoDispose ();
+  }
 
-  Ptr<Packet> P2PServer::CreateReplyPacket(int size) {
-    Ptr<Packet> p = Create<Packet> ((uint8_t*) "hello world", size);
+  Ptr<Packet> P2PServer::CreateReplyPacket(uint8_t* bytes, int size) {
+    Ptr<Packet> p = Create<Packet> (bytes, size);
     return p;
+  }
+
+  int P2PServer::ParseAction(uint8_t* message) {
+    //uint8_t* buffer = new uint8_t[12];
+    NS_LOG_INFO(message[0]);
+    return message[11];
   }
 
 void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
   NS_LOG_FUNCTION(this);
   NS_LOG_INFO("sending a thing back");
-  Ptr<Packet> p = CreateReplyPacket(125);
-  if ((m_socket->Send (p)) >= 0)
+      //maybe need a unique id, ot_udp.c - probably necessary for realism
+    //also hash pointer?
+    //if we are using the unique id need some logic after first connect
+    //otherwise....
+  int size = pckt->GetSize();
+  uint8_t *buffer = new uint8_t[size];
+  pckt->CopyData(buffer, size);
+  std::copy(buffer+12, buffer+size, buffer);
+  NS_LOG_INFO(buffer);
+  int action = ParseAction(buffer);
+  NS_LOG_INFO(action);
+
+  //maybe need to account for bittorent magic bits?
+  //need to add another set of receive/sends for the connection establishment
+  uint8_t send[12] = {0x00000000, 0x00, 0x00};
+  uint64_t numwant;
+  switch(action) {
+    case(0):
+      //do things based on a connect
+      send[0] = 0;
+      NS_LOG_INFO("connect" << send);
+      break;
+    case(1):
+      //do things based on an announce
+      //receive - check - announce - reply
+      //check for 0 bytes left?
+      numwant = buffer[92]*16777216 + buffer[93]*65536 + buffer[94]*256 + buffer[95];
+      NS_LOG_INFO("announce" << numwant);
+      break;
+    case(2):
+      //do things based on a scrape
+      NS_LOG_INFO("scrape");
+      break;
+  }
+  
+
+  Ptr<Packet> p = CreateReplyPacket(send, 125);
+  if ((m_socket->SendTo (p,0,from)) >= 0)
     {
       NS_LOG_INFO ("TraceDelay TX " << 125 << " bytes to "
                                     << from  << " Uid: "
@@ -114,7 +154,7 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
 		   << from);
     }
 
-  m_socket->SendTo(p,0,from);
+  //  m_socket->SendTo(p,0,from);
 }
   
 void

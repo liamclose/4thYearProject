@@ -181,18 +181,11 @@ P2PClient::Send (void)
   NS_ASSERT (m_sendEvent.IsExpired ());
   SeqTsHeader seqTs;
   seqTs.SetSeq (m_sent);
-  uint8_t start[12] = {0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80, 0x00, 0x00, 0x00, 0x01};
-
-  NS_LOG_INFO(start);
   std::string s = m_packets[m_sent];
-  uint8_t* send = new uint8_t[m_size+12];
-  send[95] = 4;
-  std::copy (start, start+12, send);
-  std::copy (s.c_str(), s.c_str()+m_size, send+12);
-  Ptr<Packet> p = Create<Packet> (send, m_size-(8+4)); // 8+4 : the size of the seqTs header
+  Ptr<Packet> p = Create<Packet> ((uint8_t*) s.c_str(), m_size-(8+4)); // 8+4 : the size of the seqTs header
   uint8_t *buffer = new uint8_t[m_size];
   p->CopyData(buffer, m_size);
-  NS_LOG_INFO(buffer[11]);
+  NS_LOG_INFO(buffer);
   p->AddHeader (seqTs);
 
   std::stringstream peerAddressStringStream;
