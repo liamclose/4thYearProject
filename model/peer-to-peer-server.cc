@@ -128,13 +128,6 @@ P2PServer::GetReceived (void) const
     reply += parts[1];
     reply += " ";
     for (uint8_t i=0; i < a.size(); i++) {
-     
-      // int j = InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4 ().Get();
-      //int k = j/16777216;
-      //int l = (j-k*16777216)/65536;
-      //int m = (j-k*16777216-l*65536)/256;
-      //int n = (j-k*16777216-l*65536-m*256);
-      // reply += j;
       NS_LOG_INFO("Address" << InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4() << InetSocketAddress::ConvertFrom(a.at(i)).GetPort());
       std::ostringstream oss;
       InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4().Print(oss);
@@ -196,8 +189,6 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
 	std::copy(temp.c_str(), temp.c_str()+temp.size(), send+1);
 	// }
       //if nothing left move from leaching to seeding
-      buffer[12] = 0; //should be leechers size
-      buffer[16] = 0; //number seeders
 
       
       

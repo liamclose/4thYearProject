@@ -280,8 +280,15 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
           // m_lossCounter.NotifyReceived (currentSequenceNumber);
           //look into why we'd have it and why it doesn't work :(
           m_received++;
-          UpdatePeers(std::string((char*) buffer+1));
-        } else {
+          switch(buffer[0]) {
+          case(0):
+            break;
+          case(1):
+            UpdatePeers(std::string((char*) buffer+1));
+            break;
+          }
+
+          } else {
                 NS_LOG_INFO("what the fuck");
       }
     }
