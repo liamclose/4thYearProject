@@ -124,7 +124,9 @@ P2PServer::GetReceived (void) const
     //return all addresses
     
     std::string reply;
-    NS_LOG_INFO("Formatting response" << a.size());
+    NS_LOG_INFO("Formatting response" << a.size() << parts[0] << parts[1] << parts[2]);
+    reply += parts[1];
+    reply += " ";
     for (uint8_t i=0; i < a.size(); i++) {
      
       // int j = InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4 ().Get();
@@ -133,9 +135,16 @@ P2PServer::GetReceived (void) const
       //int m = (j-k*16777216-l*65536)/256;
       //int n = (j-k*16777216-l*65536-m*256);
       // reply += j;
-      reply += InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4 ().Get();
+      NS_LOG_INFO("Address" << InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4() << InetSocketAddress::ConvertFrom(a.at(i)).GetPort());
+      std::ostringstream oss;
+      InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4().Print(oss);
+      std::stringstream ss;
+      ss << InetSocketAddress::ConvertFrom(a.at(i)).GetPort();
+      //std::string temp = (std::string) InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4();
+      reply += oss.str();
       reply += " ";
-      reply += InetSocketAddress::ConvertFrom(a.at(i)).GetPort();
+      reply += ss.str();
+      reply += " ";
     }
     return reply;
   }

@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <list>
+#include <iterator>
 
 namespace ns3 {
 
@@ -26,6 +27,8 @@ NS_LOG_COMPONENT_DEFINE ("P2PClient");
 
 int sent = 0;
 //sent = sent++;
+
+  std::map<std::string, std::vector<Address>> peers;
 
 NS_OBJECT_ENSURE_REGISTERED (P2PClient);
 
@@ -124,8 +127,7 @@ P2PClient::StartApplication (void)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
       m_socket = Socket::CreateSocket (GetNode (), tid);
-      InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (),
-                                                   m_port);
+      //     InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (), m_port);
       if (Ipv4Address::IsMatchingType(m_peerAddress) == true)
         {
           if (m_socket->Bind () == -1)
@@ -235,8 +237,25 @@ P2PClient::Send (void)
 }
 
 
+void P2PClient::UpdatePeers(std::string received) {
+    NS_LOG_FUNCTION(this);
+    std::istringstream iss(received);
+    std::vector<std::string> parts(( std::istream_iterator<std::string>(iss)),
+				   std::istream_iterator<std::string>());
+    std::vector<Address> a;
+    std::vector<Address>::iterator it;
+    //it = a.begin();
+    for(uint i = 1; i<parts.size()-1; i=i+2) {
+      it = a.end();
+      Address A = InetSocketAddress(parts.at(i).c_str(), std::stoi(parts.at(i+1)));
+      a.insert(it, A);
+    }
+    peers.insert(std::pair<std::string, std::vector<Address>>(parts.at(0), a));
+    NS_LOG_INFO(a.size());
+  }
 
- void P2PClient::HandleRead (Ptr<Socket> socket) {
+  
+void P2PClient::HandleRead (Ptr<Socket> socket) {
   NS_LOG_FUNCTION (this << socket);
   Ptr<Packet> packet;
   Address from;
@@ -257,12 +276,11 @@ P2PClient::Send (void)
                            " TXtime: " << seqTs.GetTs () <<
                            " RXtime: " << Simulator::Now () <<
                            " Delay: " << Simulator::Now () - seqTs.GetTs ());
-          NS_LOG_INFO("notified" << currentSequenceNumber);
+          
           // m_lossCounter.NotifyReceived (currentSequenceNumber);
           //look into why we'd have it and why it doesn't work :(
-          NS_LOG_INFO("notified");
           m_received++;
-          NS_LOG_INFO(InetSocketAddress::ConvertFrom(from).GetPort());
+          UpdatePeers(std::string((char*) buffer+1));
         } else {
                 NS_LOG_INFO("what the fuck");
       }

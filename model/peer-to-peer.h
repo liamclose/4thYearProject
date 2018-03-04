@@ -59,6 +59,7 @@ protected:
   virtual void DoDispose (void);
 
 private:
+  void UpdatePeers(std::string received);
   void HandleRead(Ptr<Socket> socket);
   virtual void StartApplication (void);
   virtual void StopApplication (void);
@@ -80,6 +81,7 @@ private:
   EventId m_sendEvent; //!< Event to send the next packet
   std::vector<std::string> m_packets;
   std::vector<std::string> m_data;
+  
 
 
 };
