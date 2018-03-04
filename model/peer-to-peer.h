@@ -7,7 +7,7 @@
 #include "ns3/event-id.h"
 #include "ns3/ptr.h"
 #include "ns3/ipv4-address.h"
-
+#include "ns3/packet-loss-counter.h"
 
 namespace ns3 {
 
@@ -52,12 +52,14 @@ public:
    */
   void SetRemote (Address addr);
   void SetMessages(std::vector<std::string> messages);
+  PacketLossCounter m_lossCounter; //!< Lost packet counter
 
+  
 protected:
   virtual void DoDispose (void);
 
 private:
-
+  void HandleRead(Ptr<Socket> socket);
   virtual void StartApplication (void);
   virtual void StopApplication (void);
 
@@ -69,7 +71,7 @@ private:
   uint32_t m_count; //!< Maximum number of packets the application will send
   Time m_interval; //!< Packet inter-send time
   uint32_t m_size; //!< Size of the sent packet (including the SeqTsHeader)
-
+  uint32_t m_received;
 
   uint32_t m_sent; //!< Counter for sent packets
   Ptr<Socket> m_socket; //!< Socket

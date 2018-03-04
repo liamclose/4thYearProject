@@ -44,7 +44,7 @@ P2PClient::GetTypeId (void)
                    MakeUintegerAccessor (&P2PClient::m_count),
                    MakeUintegerChecker<uint32_t> ())
    .AddAttribute ("Interval",
-                   "The time to wait between packets", TimeValue (Seconds (1.0)),
+                   "The time to wait between packets", TimeValue (Seconds (2.0)),
                    MakeTimeAccessor (&P2PClient::m_interval),
                    MakeTimeChecker ())
     .AddAttribute ("RemoteAddress",
@@ -70,16 +70,21 @@ P2PClient::GetTypeId (void)
 }
 
 P2PClient::P2PClient ()
+  : m_lossCounter (0)
 {
   NS_LOG_INFO("===============???");
   NS_LOG_FUNCTION (this);
   m_sent = 0;
+  m_received = 0;
   m_socket = 0;
+  
   m_packets = std::vector<std::string>(); 
   m_sendEvent = EventId ();
 }
 
-P2PClient::P2PClient (std::vector<std::string> packets) {
+P2PClient::P2PClient (std::vector<std::string> packets)
+  : m_lossCounter (0)
+{
    m_packets = packets;
 }
 
@@ -119,6 +124,8 @@ P2PClient::StartApplication (void)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
       m_socket = Socket::CreateSocket (GetNode (), tid);
+      InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (),
+                                                   m_port);
       if (Ipv4Address::IsMatchingType(m_peerAddress) == true)
         {
           if (m_socket->Bind () == -1)
@@ -156,8 +163,8 @@ P2PClient::StartApplication (void)
           NS_ASSERT_MSG (false, "Incompatible address type: " << m_peerAddress);
         }
     }
-
-  m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
+  m_socket->SetRecvCallback (MakeCallback (&P2PClient::HandleRead, this));
+  //  m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
   m_sendEvent = Simulator::Schedule (Seconds (0.0), &P2PClient::Send, this);
 }
@@ -184,7 +191,7 @@ P2PClient::Send (void)
   uint8_t start[12] = {0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80, 0x00, 0x00, 0x00, 0x01};
 
   NS_LOG_INFO(start);
-  std::string s = " 3018390 2016_05_08_22_31_32_220.ts"; //m_packets[m_sent];
+  std::string s = m_packets[m_sent];
   uint8_t* send = new uint8_t[m_size+12];
   std::fill(send, send+m_size+12, 0x00);
   std::copy (start, start+12, send);
@@ -226,4 +233,39 @@ P2PClient::Send (void)
       m_sendEvent = Simulator::Schedule (m_interval, &P2PClient::Send, this);
     }
 }
+
+
+
+ void P2PClient::HandleRead (Ptr<Socket> socket) {
+  NS_LOG_FUNCTION (this << socket);
+  Ptr<Packet> packet;
+  Address from;
+  while ((packet = socket->RecvFrom (from)))
+    { if (packet->GetSize () > 0)
+        {
+          SeqTsHeader seqTs;
+          packet->RemoveHeader (seqTs);
+          uint32_t currentSequenceNumber = seqTs.GetSeq ();
+           int size = packet->GetSize();
+          uint8_t *buffer = new uint8_t[size];
+          packet->CopyData(buffer, size);
+          NS_LOG_INFO ("TraceDelay: RX " << packet->GetSize () <<
+                          " bytes from "<< InetSocketAddress::ConvertFrom (from).GetIpv4 () <<
+                           " Sequence Number: " << currentSequenceNumber <<
+                           " Uid: " << packet->GetUid () <<
+                           " Packet: " << buffer <<
+                           " TXtime: " << seqTs.GetTs () <<
+                           " RXtime: " << Simulator::Now () <<
+                           " Delay: " << Simulator::Now () - seqTs.GetTs ());
+          NS_LOG_INFO("notified" << currentSequenceNumber);
+          // m_lossCounter.NotifyReceived (currentSequenceNumber);
+          //look into why we'd have it and why it doesn't work :(
+          NS_LOG_INFO("notified");
+          m_received++;
+          NS_LOG_INFO(InetSocketAddress::ConvertFrom(from).GetPort());
+        } else {
+                NS_LOG_INFO("what the fuck");
+      }
+    }
+ }
 }
