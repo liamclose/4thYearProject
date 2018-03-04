@@ -121,10 +121,28 @@ P2PServer::GetReceived (void) const
     it = a.begin();
     
     a.insert(it, from);
+    std::set<Address> st = std::set<Address>(a.begin(), a.end());
+    a = std::vector<Address>(st.begin(), st.end());
     NS_LOG_INFO(a.size());
     torrents.insert(std::pair<std::string, std::vector<Address>>(parts[1], a));
     //return all addresses
-    return received;
+    
+    std::string reply;
+    NS_LOG_INFO("Formatting response" << a.size());
+    for (uint8_t i=0; i < a.size(); i++) {
+     
+      // int j = InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4 ().Get();
+      //int k = j/16777216;
+      //int l = (j-k*16777216)/65536;
+      //int m = (j-k*16777216-l*65536)/256;
+      //int n = (j-k*16777216-l*65536-m*256);
+      // reply += j;
+      reply += InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4 ().Get();
+      reply += " ";
+      reply += InetSocketAddress::ConvertFrom(a.at(i)).GetPort();
+      NS_LOG_INFO(reply);
+    }
+    return reply;
   }
 
 void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
