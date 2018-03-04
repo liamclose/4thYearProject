@@ -15,13 +15,15 @@
 #include "ns3/seq-ts-header.h"
 #include "peer-to-peer-server.h"
 
+#include <iterator>
+
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("P2PServer");
 
 NS_OBJECT_ENSURE_REGISTERED (P2PServer);
 
-
+  std::map<std::string, std::vector<Address>> torrents;
 TypeId
 P2PServer::GetTypeId (void)
 {
@@ -100,6 +102,31 @@ P2PServer::GetReceived (void) const
     return message[11];
   }
 
+  std::string P2PServer::AddTorrentReturnPeers(Address from, std::string received) {
+     NS_LOG_FUNCTION(this);
+    std::istringstream iss(received);
+    NS_LOG_INFO(from);
+    std::vector<std::string> parts(( std::istream_iterator<std::string>(iss)),
+				   std::istream_iterator<std::string>());
+    NS_LOG_INFO("ok" << parts[0] << parts[1] << parts[2]);
+    std::vector<Address> a;
+    NS_LOG_INFO(a.size());
+    std::vector<Address>::iterator it;
+    if (torrents.count(parts[1])!=0) {
+	a = torrents.at(parts[1]);
+        torrents.erase(parts[1]);
+
+    }
+    NS_LOG_INFO(a.size());
+    it = a.begin();
+    
+    a.insert(it, from);
+    NS_LOG_INFO(a.size());
+    torrents.insert(std::pair<std::string, std::vector<Address>>(parts[1], a));
+    //return all addresses
+    return received;
+  }
+
 void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
   NS_LOG_FUNCTION(this);
   NS_LOG_INFO("sending a thing back");
@@ -110,27 +137,49 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
   int size = pckt->GetSize();
   uint8_t *buffer = new uint8_t[size];
   pckt->CopyData(buffer, size);
-  std::copy(buffer+12, buffer+size, buffer);
-  NS_LOG_INFO(buffer);
+  //std::copy(buffer+12, buffer+size, buffer);
+  //NS_LOG_INFO(buffer);
   int action = ParseAction(buffer);
   NS_LOG_INFO(action);
 
   //maybe need to account for bittorent magic bits?
   //need to add another set of receive/sends for the connection establishment
-  uint8_t send[12] = {0x00000000, 0x00, 0x00};
-  uint64_t numwant;
+  uint8_t send[1024];
+  //  uint64_t numwant;
+  int event;
+  std::string temp;
+
   switch(action) {
     case(0):
       //do things based on a connect
-      send[0] = 0;
-      NS_LOG_INFO("connect" << send);
+      send[0] = 0; //first bit signifies connect, in real torrent other information also added
+      NS_LOG_INFO("connect request received");
       break;
     case(1):
       //do things based on an announce
       //receive - check - announce - reply
       //check for 0 bytes left?
-      numwant = buffer[92]*16777216 + buffer[93]*65536 + buffer[94]*256 + buffer[95];
-      NS_LOG_INFO("announce" << numwant);
+      
+      NS_LOG_INFO("announce request received" <<size); //might need to limit size
+      event = buffer[83]; //might not need
+      NS_LOG_INFO(event);
+      // std::fill(buffer,buffer+buffer.size(), 0x00);
+
+      send[0] = 1; //announce
+      //if (event==3) {
+	//remove torrent
+      //} else if (event==1) {
+      //TODO - change the stuff with the buffer add
+      temp = std::string((char*) buffer+11);
+      temp = AddTorrentReturnPeers(from, temp);
+	std::copy(temp.c_str(), temp.c_str()+temp.size(), send+1);
+	// }
+      //if nothing left move from leaching to seeding
+      buffer[12] = 0; //should be leechers size
+      buffer[16] = 0; //number seeders
+
+      
+      
       break;
     case(2):
       //do things based on a scrape
@@ -161,7 +210,6 @@ void
 P2PServer::StartApplication (void)
 {
   NS_LOG_FUNCTION (this);
-
   if (m_socket == 0)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");

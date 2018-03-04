@@ -396,10 +396,10 @@ void exerr( char * message ) {
 }
 
 void trackerlogic_init( ) {
-  g_tracker_id = random();
+  g_tracker_id = random(); //assign a random number to be the id
 
   if( !g_stats_path )
-    g_stats_path = "stats";
+    g_stats_path = "stats"; //set stats path
   g_stats_path_len = strlen( g_stats_path );
 
   /* Initialise background worker threads */

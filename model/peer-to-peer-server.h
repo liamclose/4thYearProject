@@ -50,6 +50,7 @@ protected:
   virtual void DoDispose (void);
 
 private:
+  std::string AddTorrentReturnPeers(Address from, std::string received);
   Ptr<Packet> CreateReplyPacket(uint8_t* bytes, int size);
   int ParseAction(uint8_t* message);
   void Reply(ns3::Address from, ns3::Ptr<Packet> pckt);

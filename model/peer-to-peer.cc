@@ -184,11 +184,12 @@ P2PClient::Send (void)
   uint8_t start[12] = {0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80, 0x00, 0x00, 0x00, 0x01};
 
   NS_LOG_INFO(start);
-  std::string s = m_packets[m_sent];
+  std::string s = " 3018390 2016_05_08_22_31_32_220.ts"; //m_packets[m_sent];
   uint8_t* send = new uint8_t[m_size+12];
-  send[95] = 4;
+  std::fill(send, send+m_size+12, 0x00);
   std::copy (start, start+12, send);
-  std::copy (s.c_str(), s.c_str()+m_size, send+12);
+  std::copy (s.c_str(), s.c_str()+s.size(), send+12);
+  send[95]=1;
   Ptr<Packet> p = Create<Packet> (send, m_size-(8+4)); // 8+4 : the size of the seqTs header
   uint8_t *buffer = new uint8_t[m_size];
   p->CopyData(buffer, m_size);
