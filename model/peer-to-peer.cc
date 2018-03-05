@@ -29,6 +29,7 @@ int sent = 0;
 //sent = sent++;
 
   std::map<std::string, std::vector<Address>> peers;
+  int tcpPort = 2020;
 
 NS_OBJECT_ENSURE_REGISTERED (P2PClient);
 
@@ -80,7 +81,7 @@ P2PClient::P2PClient ()
   m_sent = 0;
   m_received = 0;
   m_socket = 0;
-  
+  m_socket_tcp = 0;
   m_packets = std::vector<std::string>(); 
   m_sendEvent = EventId ();
 }
@@ -127,10 +128,10 @@ P2PClient::StartApplication (void)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
       m_socket = Socket::CreateSocket (GetNode (), tid);
-      //     InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (), m_port);
+           InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (), 5050);
       if (Ipv4Address::IsMatchingType(m_peerAddress) == true)
         {
-          if (m_socket->Bind () == -1)
+          if (m_socket->Bind (local) == -1)
             {
               NS_FATAL_ERROR ("Failed to bind socket");
             }
@@ -165,9 +166,25 @@ P2PClient::StartApplication (void)
           NS_ASSERT_MSG (false, "Incompatible address type: " << m_peerAddress);
         }
     }
+  if (m_socket_tcp == 0)
+    {
+      TypeId tid = TypeId::LookupByName ("ns3::TcpSocketFactory");
+      m_socket_tcp = Socket::CreateSocket (GetNode (), tid);
+      InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (), tcpPort);
+      if (Ipv4Address::IsMatchingType(m_peerAddress) == true)
+        {
+          if (m_socket_tcp->Bind (local) == -1)
+            {
+              NS_FATAL_ERROR ("Failed to bind socket");
+            }
+      
+        }
+     }
+    
   m_socket->SetRecvCallback (MakeCallback (&P2PClient::HandleRead, this));
   //  m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
+
   m_sendEvent = Simulator::Schedule (Seconds (0.0), &P2PClient::Send, this);
 }
 
@@ -182,6 +199,18 @@ void P2PClient::SetMessages(std::vector<std::string> messages) {
    NS_LOG_FUNCTION(this);
    m_packets = messages;
 }
+
+  void P2PClient::SetupTCPConnections() {
+    NS_LOG_FUNCTION(this);
+    NS_LOG_INFO("Things aren't working");
+    std::vector<Address> a = peers.at("3018390");
+    NS_LOG_INFO(a.at(0));
+    Ipv4Address p = InetSocketAddress::ConvertFrom(a.at(0)).GetIpv4();
+    NS_LOG_INFO("Connecting TCP-ly" << p);
+    m_socket_tcp->Connect (InetSocketAddress (InetSocketAddress::ConvertFrom(a.at(0)).GetIpv4(), tcpPort));
+    NS_LOG_INFO("Size of peers list is:" << peers.at("3018390").size());
+
+  }
 
 void
 P2PClient::Send (void)
@@ -244,6 +273,9 @@ void P2PClient::UpdatePeers(std::string received) {
 				   std::istream_iterator<std::string>());
     std::vector<Address> a;
     std::vector<Address>::iterator it;
+    if (peers.count("3018390")!=0) {
+      peers.erase("3018390");
+    }
     //it = a.begin();
     for(uint i = 1; i<parts.size()-1; i=i+2) {
       it = a.end();
@@ -251,8 +283,9 @@ void P2PClient::UpdatePeers(std::string received) {
       a.insert(it, A);
     }
     peers.insert(std::pair<std::string, std::vector<Address>>(parts.at(0), a));
-    NS_LOG_INFO(a.size());
-  }
+    NS_LOG_INFO("Peers list size is:" << m_socket_tcp.GetSndBufSize()  << parts.at(0));
+    NS_LOG_INFO("Size of peers list is:" << peers.at("3018390").size());
+}
 
   
 void P2PClient::HandleRead (Ptr<Socket> socket) {
@@ -285,6 +318,9 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
             break;
           case(1):
             UpdatePeers(std::string((char*) buffer+1));
+
+               NS_LOG_INFO("Size of peers list is:" << peers.at("3018390").size());
+            SetupTCPConnections();
             break;
           }
 

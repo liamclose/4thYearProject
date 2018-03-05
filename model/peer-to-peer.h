@@ -61,6 +61,7 @@ protected:
 private:
   void UpdatePeers(std::string received);
   void HandleRead(Ptr<Socket> socket);
+  void SetupTCPConnections(void);
   virtual void StartApplication (void);
   virtual void StopApplication (void);
 
@@ -76,6 +77,7 @@ private:
 
   uint32_t m_sent; //!< Counter for sent packets
   Ptr<Socket> m_socket; //!< Socket
+  Ptr<Socket> m_socket_tcp;
   Address m_peerAddress; //!< Remote peer address
   uint16_t m_peerPort; //!< Remote peer port
   EventId m_sendEvent; //!< Event to send the next packet
