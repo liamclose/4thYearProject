@@ -122,7 +122,8 @@ P2PServer::GetReceived (void) const
     a = std::vector<Address>(st.begin(), st.end());
     torrents.insert(std::pair<std::string, std::vector<Address>>(parts[1], a));
     //return all addresses
-    
+    //TODO add logic for if there's no real peer...and filtering out the one that's requesting
+    //or do it client side...
     std::string reply;
     NS_LOG_INFO("Formatting response" << a.size() << parts[0] << parts[1] << parts[2]);
     reply += parts[1];

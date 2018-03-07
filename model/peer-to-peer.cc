@@ -4,6 +4,7 @@
 #include "ns3/packet.h"
 #include "ns3/log.h"
 #include "ns3/ipv4-address.h"
+#include "ns3/ipv4.h"
 #include "ns3/nstime.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/inet6-socket-address.h"
@@ -81,7 +82,11 @@ P2PClient::P2PClient ()
   m_sent = 0;
   m_received = 0;
   m_socket = 0;
+  m_dataRate =DataRate("2Mbps");
+  m_packetSize = 512;
   m_socket_tcp = 0;
+  m_nPackets = 60;
+  m_connected = false;
   m_packets = std::vector<std::string>(); 
   m_sendEvent = EventId ();
 }
@@ -123,7 +128,6 @@ void
 P2PClient::StartApplication (void)
 {
   NS_LOG_FUNCTION (this);
-
   if (m_socket == 0)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
@@ -166,6 +170,7 @@ P2PClient::StartApplication (void)
           NS_ASSERT_MSG (false, "Incompatible address type: " << m_peerAddress);
         }
     }
+  //Bind the tcp socket to port 2020
   if (m_socket_tcp == 0)
     {
       TypeId tid = TypeId::LookupByName ("ns3::TcpSocketFactory");
@@ -180,13 +185,27 @@ P2PClient::StartApplication (void)
       
         }
      }
-    
+  //this is how the client receives responses from the server
   m_socket->SetRecvCallback (MakeCallback (&P2PClient::HandleRead, this));
+  //theoretically this would be how the client gets the data...it doesn't work though
+  //m_socket_tcp->SetRecvCallback(MakeCallback (&P2PClient::HandleTcp, this));
+  m_socket_tcp->SetConnectCallback (
+                                    MakeCallback (&P2PClient::HandleConnect, this),
+                                    MakeCallback (&P2PClient::HandleConnectError, this));
+  m_socket_tcp->SetAcceptCallback (
+    MakeNullCallback<bool, Ptr<Socket>, const Address &> (),
+    MakeCallback (&P2PClient::HandleAccept, this));
+   m_socket_tcp->SetCloseCallbacks (
+    MakeCallback (&P2PClient::HandlePeerClose, this),
+    MakeCallback (&P2PClient::HandlePeerError, this));
   //  m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
-
+  m_socket_tcp->Listen();
+  //m_socket_tcp->ShutdownSend ();
   m_sendEvent = Simulator::Schedule (Seconds (0.0), &P2PClient::Send, this);
 }
+
+
 
 void
 P2PClient::StopApplication (void)
@@ -200,17 +219,85 @@ void P2PClient::SetMessages(std::vector<std::string> messages) {
    m_packets = messages;
 }
 
+void P2PClient::HandlePeerClose (Ptr<Socket> socket)
+{
+  NS_LOG_FUNCTION (this << socket);
+}
+ 
+void P2PClient::HandlePeerError (Ptr<Socket> socket)
+{
+  NS_LOG_FUNCTION (this << socket);
+}
+
+void P2PClient::HandleConnectError (Ptr<Socket> socket)
+{
+  NS_LOG_FUNCTION (this << socket);
+}
+
+void P2PClient::HandleConnect (Ptr<Socket> socket)
+{
+  NS_LOG_FUNCTION (this << socket);
+  NS_LOG_INFO("Fucking finally");
+  Ptr<Ipv4> ipv4 = this->m_node->GetObject<Ipv4>();
+  NS_LOG_INFO(ipv4->GetAddress(1,0).GetLocal());
+  socket->SetRecvCallback (MakeCallback (&P2PClient::HandleTcp, this));
+  //m_socketList.push_back (s);
+  uint8_t buffer[1];
+  buffer[0] = 0; //check protocol
+  socket->Send(Create<Packet>(buffer, 1));
+
+}
+ 
+
+void P2PClient::HandleAccept (Ptr<Socket> s, const Address& from)
+{
+  NS_LOG_FUNCTION (this << s << from);
+  NS_LOG_INFO("Handling an accept??" << InetSocketAddress::ConvertFrom(from).GetIpv4() << InetSocketAddress::ConvertFrom(from).GetPort());
+  s->SetRecvCallback (MakeCallback (&P2PClient::HandleTcp, this));
+  m_socketList.push_back (s);
+  s->Send(Create<Packet>(m_packetSize));
+}
+
+
   void P2PClient::SetupTCPConnections() {
     NS_LOG_FUNCTION(this);
-    NS_LOG_INFO("Things aren't working");
     std::vector<Address> a = peers.at("3018390");
-    NS_LOG_INFO(a.at(0));
-    Ipv4Address p = InetSocketAddress::ConvertFrom(a.at(0)).GetIpv4();
-    NS_LOG_INFO("Connecting TCP-ly" << p);
-    m_socket_tcp->Connect (InetSocketAddress (InetSocketAddress::ConvertFrom(a.at(0)).GetIpv4(), tcpPort));
-    NS_LOG_INFO("Size of peers list is:" << peers.at("3018390").size());
-
+    for (uint i=0;i<a.size(); i++) {
+       TypeId tid = TypeId::LookupByName ("ns3::TcpSocketFactory");
+       Ptr<Socket> s2 = Socket::CreateSocket (GetNode (), tid);
+      s2->SetConnectCallback (
+                                    MakeCallback (&P2PClient::HandleConnect, this),
+                                    MakeCallback (&P2PClient::HandleConnectError, this));
+      s2->Connect(InetSocketAddress (InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4(), tcpPort));
+    }
+    //P2PClient::SendPacket();
   }
+
+void P2PClient::SendPacket (Ptr<Socket> sock)
+{
+  uint8_t buffer[m_packetSize];
+  buffer[0] = 1;
+  NS_LOG_INFO("tcp send");
+  Ptr<Packet> packet = Create<Packet> (buffer, m_packetSize);
+  //maybe we care about packet info?
+  sock->Send (packet);
+  NS_LOG_INFO(packet->GetUid());
+  if (++m_tcpSent < m_nPackets)
+    {
+      ScheduleTx (sock);
+    }
+}
+
+
+void P2PClient::ScheduleTx (Ptr<Socket> sock)
+  { if (true)
+  //  if (m_running)
+    {
+      Time tNext (Seconds (m_packetSize * 8 / static_cast<double> (m_dataRate.GetBitRate ())));
+      NS_LOG_INFO(tNext);
+      m_sendEvent = Simulator::Schedule (tNext, &P2PClient::SendPacket, this, sock);
+    }
+}
 
 void
 P2PClient::Send (void)
@@ -220,19 +307,15 @@ P2PClient::Send (void)
   SeqTsHeader seqTs;
   seqTs.SetSeq (m_sent);
   uint8_t start[12] = {0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80, 0x00, 0x00, 0x00, 0x01};
-
-  NS_LOG_INFO(start);
   std::string s = m_packets[m_sent];
   uint8_t* send = new uint8_t[m_size+12];
   std::fill(send, send+m_size+12, 0x00);
   std::copy (start, start+12, send);
   std::copy (s.c_str(), s.c_str()+s.size(), send+12);
   send[95]=1;
-  Ptr<Packet> p = Create<Packet> (send, m_size-(8+4)); // 8+4 : the size of the seqTs header
+ 
   uint8_t *buffer = new uint8_t[m_size];
-  p->CopyData(buffer, m_size);
-  NS_LOG_INFO(buffer[11]);
-  p->AddHeader (seqTs);
+
 
   std::stringstream peerAddressStringStream;
   if (Ipv4Address::IsMatchingType (m_peerAddress))
@@ -244,25 +327,39 @@ P2PClient::Send (void)
       peerAddressStringStream << Ipv6Address::ConvertFrom (m_peerAddress);
     }
 
-  if ((m_socket->Send (p)) >= 0)
-    {p->CopyData(buffer, m_size);
-      ++m_sent;
-      NS_LOG_INFO ("TraceDelay TX " << m_size << " bytes to "
+  for (int i = 0; i<2; i++) {
+     Ptr<Packet> p = Create<Packet> (send, m_size-(8+4)); // 8+4 : the size of the seqTs header
+     if (i==0) {
+       send[11] = 0;
+     }
+     p->CopyData(buffer, m_size);
+     p->AddHeader (seqTs);
+     if ((m_socket->Send (p)) >= 0) {
+        p->CopyData(buffer, m_size);
+        if (i==1) {
+          ++m_sent;
+        }
+        NS_LOG_INFO ("TraceDelay TX " << m_size << " bytes to "
                                     << peerAddressStringStream.str () << " Uid: "
                                     << p->GetUid () << " Time: "
                                     << (Simulator::Now ()).GetSeconds ());
 
-    }
-  else
-    {
+     }
+     else {
       NS_LOG_INFO ("Error while sending " << m_size << " bytes to "
                                           << peerAddressStringStream.str ());
-    }
+     }
 
-  if (m_sent < m_count)
-    {
-      m_sendEvent = Simulator::Schedule (m_interval, &P2PClient::Send, this);
+    if (m_sent < m_count) {
+      Time in;
+      if (i==0) {
+        in = m_interval;
+      } else {
+        in = Time(0.001);
+      }
+      m_sendEvent = Simulator::Schedule (in, &P2PClient::Send, this);
     }
+  }
 }
 
 
@@ -276,6 +373,7 @@ void P2PClient::UpdatePeers(std::string received) {
     if (peers.count("3018390")!=0) {
       peers.erase("3018390");
     }
+    
     //it = a.begin();
     for(uint i = 1; i<parts.size()-1; i=i+2) {
       it = a.end();
@@ -283,10 +381,50 @@ void P2PClient::UpdatePeers(std::string received) {
       a.insert(it, A);
     }
     peers.insert(std::pair<std::string, std::vector<Address>>(parts.at(0), a));
-    NS_LOG_INFO("Peers list size is:" << m_socket_tcp.GetSndBufSize()  << parts.at(0));
-    NS_LOG_INFO("Size of peers list is:" << peers.at("3018390").size());
 }
 
+  void P2PClient::HandleTcp (Ptr<Socket> socket) {
+    NS_LOG_FUNCTION (this << socket);
+      Ptr<Packet> packet;
+  Address from;
+  while ((packet = socket->RecvFrom (from)))
+    {
+      if (packet->GetSize () == 0)
+        { //EOF
+          break;
+        }
+      m_totalRx += packet->GetSize ();
+      if (InetSocketAddress::IsMatchingType (from))
+        {
+          NS_LOG_INFO ("At time " << Simulator::Now ().GetSeconds ()
+                       << "s packet sink received "
+                       <<  packet->GetSize () << " bytes from "
+                       << InetSocketAddress::ConvertFrom(from).GetIpv4 ()
+                       << " port " << InetSocketAddress::ConvertFrom (from).GetPort ()
+                       << " total Rx " << m_totalRx << " bytes");
+        }
+      else if (Inet6SocketAddress::IsMatchingType (from))
+        {
+          NS_LOG_INFO ("At time " << Simulator::Now ().GetSeconds ()
+                       << "s packet sink received "
+                       <<  packet->GetSize () << " bytes from "
+                       << Inet6SocketAddress::ConvertFrom(from).GetIpv6 ()
+                       << " port " << Inet6SocketAddress::ConvertFrom (from).GetPort ()
+                       << " total Rx " << m_totalRx << " bytes");
+        }
+      //logging, enable later?
+      //m_rxTrace (packet, from);
+      int size = packet->GetSize();
+      uint8_t *buffer = new uint8_t[size];
+      packet->CopyData(buffer, size);
+      if (buffer[0]==0) {
+        NS_LOG_INFO("Data req");
+        SendPacket(socket);
+      } else {
+        NS_LOG_INFO("Got data, updating local cache");
+      }
+    }
+  }
   
 void P2PClient::HandleRead (Ptr<Socket> socket) {
   NS_LOG_FUNCTION (this << socket);
@@ -318,8 +456,6 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
             break;
           case(1):
             UpdatePeers(std::string((char*) buffer+1));
-
-               NS_LOG_INFO("Size of peers list is:" << peers.at("3018390").size());
             SetupTCPConnections();
             break;
           }

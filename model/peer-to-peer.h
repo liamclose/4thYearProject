@@ -9,6 +9,7 @@
 #include "ns3/ipv4-address.h"
 #include "ns3/packet-loss-counter.h"
 
+#include "ns3/network-module.h"
 namespace ns3 {
 
 
@@ -61,7 +62,15 @@ protected:
 private:
   void UpdatePeers(std::string received);
   void HandleRead(Ptr<Socket> socket);
+  void HandleTcp(Ptr<Socket> socket);
+  void HandlePeerClose(Ptr<Socket> socket);
+  void HandlePeerError(Ptr<Socket> socket);
+  void HandleConnect(Ptr<Socket> socket);
+  void HandleConnectError(Ptr<Socket> socket);
+  void HandleAccept(Ptr<Socket> socket, const Address& from);
   void SetupTCPConnections(void);
+  void SendPacket(Ptr<Socket> sock);
+  void ScheduleTx(Ptr<Socket> sock);
   virtual void StartApplication (void);
   virtual void StopApplication (void);
 
@@ -74,7 +83,14 @@ private:
   Time m_interval; //!< Packet inter-send time
   uint32_t m_size; //!< Size of the sent packet (including the SeqTsHeader)
   uint32_t m_received;
-
+  ns3::DataRate m_dataRate;
+  uint32_t m_packetSize;
+  uint32_t m_tcpSent;
+  uint32_t m_nPackets;
+  uint32_t m_totalRx;
+  bool m_connected;
+  std::list<Ptr<Socket> > m_socketList; //!< the accepted sockets
+  
   uint32_t m_sent; //!< Counter for sent packets
   Ptr<Socket> m_socket; //!< Socket
   Ptr<Socket> m_socket_tcp;
