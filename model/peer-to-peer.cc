@@ -85,7 +85,7 @@ P2PClient::P2PClient ()
   m_dataRate =DataRate("2Mbps");
   m_packetSize = 512;
   m_socket_tcp = 0;
-  m_nPackets = 60;
+  m_nPackets = 600;
   m_connected = false;
   m_packets = std::vector<std::string>(); 
   m_sendEvent = EventId ();
@@ -238,9 +238,7 @@ void P2PClient::HandleConnect (Ptr<Socket> socket)
 {
   NS_LOG_FUNCTION (this << socket);
   NS_LOG_INFO("Fucking finally");
-  Ptr<Ipv4> ipv4 = this->m_node->GetObject<Ipv4>();
-  NS_LOG_INFO(ipv4->GetAddress(1,0).GetLocal());
-  socket->SetRecvCallback (MakeCallback (&P2PClient::HandleTcp, this));
+    socket->SetRecvCallback (MakeCallback (&P2PClient::HandleTcp, this));
   //m_socketList.push_back (s);
   uint8_t buffer[1];
   buffer[0] = 0; //check protocol
@@ -306,16 +304,17 @@ P2PClient::Send (void)
   NS_ASSERT (m_sendEvent.IsExpired ());
   SeqTsHeader seqTs;
   seqTs.SetSeq (m_sent);
-  uint8_t start[12] = {0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80, 0x00, 0x00, 0x00, 0x01};
+  uint8_t start[12] = {0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80, 0x00, 0x00, 0x00, 0x00};
   std::string s = m_packets[m_sent];
   uint8_t* send = new uint8_t[m_size+12];
   std::fill(send, send+m_size+12, 0x00);
   std::copy (start, start+12, send);
   std::copy (s.c_str(), s.c_str()+s.size(), send+12);
   send[95]=1;
- 
+  Ptr<Packet> p = Create<Packet> (send, m_size-(8+4)); // 8+4 : the size of the seqTs header
   uint8_t *buffer = new uint8_t[m_size];
-
+  p->CopyData(buffer, m_size);
+  p->AddHeader (seqTs);
 
   std::stringstream peerAddressStringStream;
   if (Ipv4Address::IsMatchingType (m_peerAddress))
@@ -326,40 +325,27 @@ P2PClient::Send (void)
     {
       peerAddressStringStream << Ipv6Address::ConvertFrom (m_peerAddress);
     }
-
-  for (int i = 0; i<2; i++) {
-     Ptr<Packet> p = Create<Packet> (send, m_size-(8+4)); // 8+4 : the size of the seqTs header
-     if (i==0) {
-       send[11] = 0;
-     }
-     p->CopyData(buffer, m_size);
-     p->AddHeader (seqTs);
-     if ((m_socket->Send (p)) >= 0) {
+    if ((m_socket->Send (p)) >= 0)
+      {
         p->CopyData(buffer, m_size);
-        if (i==1) {
-          ++m_sent;
-        }
-        NS_LOG_INFO ("TraceDelay TX " << m_size << " bytes to "
+      ++m_sent;
+      NS_LOG_INFO ("TraceDelay TX " << m_size << " bytes to "
                                     << peerAddressStringStream.str () << " Uid: "
                                     << p->GetUid () << " Time: "
                                     << (Simulator::Now ()).GetSeconds ());
 
-     }
-     else {
+    }
+  else
+    {
       NS_LOG_INFO ("Error while sending " << m_size << " bytes to "
                                           << peerAddressStringStream.str ());
-     }
-
-    if (m_sent < m_count) {
-      Time in;
-      if (i==0) {
-        in = m_interval;
-      } else {
-        in = Time(0.001);
-      }
-      m_sendEvent = Simulator::Schedule (in, &P2PClient::Send, this);
     }
-  }
+
+
+  if (m_sent < m_count)
+    {
+      m_sendEvent = Simulator::Schedule (m_interval, &P2PClient::Send, this);
+    }
 }
 
 
@@ -377,8 +363,16 @@ void P2PClient::UpdatePeers(std::string received) {
     //it = a.begin();
     for(uint i = 1; i<parts.size()-1; i=i+2) {
       it = a.end();
+      Ptr<Ipv4> ipv4 = this->m_node->GetObject<Ipv4>();
+      m_localIpv4  =ipv4->GetAddress(1,0).GetLocal();
+
       Address A = InetSocketAddress(parts.at(i).c_str(), std::stoi(parts.at(i+1)));
-      a.insert(it, A);
+      if (!(InetSocketAddress::ConvertFrom(A).GetIpv4() ==m_localIpv4)) {
+        NS_LOG_INFO("Found a peer" << InetSocketAddress::ConvertFrom(A).GetIpv4());
+        a.insert(it, A);
+      } else {
+        NS_LOG_INFO(InetSocketAddress::ConvertFrom(A).GetIpv4() << m_localIpv4);
+      }
     }
     peers.insert(std::pair<std::string, std::vector<Address>>(parts.at(0), a));
 }
@@ -451,9 +445,28 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
           // m_lossCounter.NotifyReceived (currentSequenceNumber);
           //look into why we'd have it and why it doesn't work :(
           m_received++;
+          Ptr<Packet> p;
+          std::stringstream peerAddressStringStream;
           switch(buffer[0]) {
           case(0):
-            break;
+            buffer[0] = 1;
+                buffer[11] = 1;
+                p = Create<Packet> (buffer, m_size-(8+4));
+                p->AddHeader (seqTs);
+                if ((m_socket->Send (p)) >= 0) {
+                  ++m_sent;
+                  NS_LOG_INFO ("TraceDelay TX " << m_size << " bytes to "
+                                    << peerAddressStringStream.str () << " Uid: "
+                                    << p->GetUid () << " Time: "
+                                    << (Simulator::Now ()).GetSeconds ());
+
+                }
+                else {
+                  NS_LOG_INFO ("Error while sending " << m_size << " bytes to "
+                                          << peerAddressStringStream.str ());
+                }
+                NS_LOG_INFO("Dealt with connect request");
+                break;
           case(1):
             UpdatePeers(std::string((char*) buffer+1));
             SetupTCPConnections();

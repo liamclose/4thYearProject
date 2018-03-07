@@ -9,6 +9,7 @@
 #include "ns3/simulator.h"
 #include "ns3/socket-factory.h"
 #include "ns3/packet.h"
+#include "ns3/ipv4.h"
 #include "ns3/uinteger.h"
 #include "ns3/packet-loss-counter.h"
 
@@ -115,6 +116,12 @@ P2PServer::GetReceived (void) const
 	a = torrents.at(parts[1]);
         torrents.erase(parts[1]);
 
+    } else {
+      it = a.begin();
+      Ptr<Ipv4> ipv4 =  this->m_node->GetObject<Ipv4>();
+      Address local = (InetSocketAddress) ipv4->GetAddress(1,0).GetLocal();
+      NS_LOG_INFO("MY ADD: " << local);
+      a.insert(it, local);
     }
     it = a.begin();
     a.insert(it, from);
@@ -122,13 +129,13 @@ P2PServer::GetReceived (void) const
     a = std::vector<Address>(st.begin(), st.end());
     torrents.insert(std::pair<std::string, std::vector<Address>>(parts[1], a));
     //return all addresses
-    //TODO add logic for if there's no real peer...and filtering out the one that's requesting
-    //or do it client side...
+    //limit?
     std::string reply;
     NS_LOG_INFO("Formatting response" << a.size() << parts[0] << parts[1] << parts[2]);
     reply += parts[1];
     reply += " ";
     for (uint8_t i=0; i < a.size(); i++) {
+      NS_LOG_INFO(":( " << a.at(i)<< InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4() << InetSocketAddress::ConvertFrom(a.at(i)).GetPort());
       NS_LOG_INFO("Address" << InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4() << InetSocketAddress::ConvertFrom(a.at(i)).GetPort());
       std::ostringstream oss;
       InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4().Print(oss);
@@ -166,9 +173,12 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
 
   switch(action) {
     case(0):
+      std::copy(buffer,buffer+size,send);
       //do things based on a connect
       send[0] = 0; //first bit signifies connect, in real torrent other information also added
       NS_LOG_INFO("connect request received");
+      //need to send reply, contents are ehhh
+      
       break;
     case(1):
       //do things based on an announce

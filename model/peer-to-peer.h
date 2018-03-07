@@ -8,7 +8,7 @@
 #include "ns3/ptr.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/packet-loss-counter.h"
-
+#include "ns3/ipv4.h"
 #include "ns3/network-module.h"
 namespace ns3 {
 
@@ -89,6 +89,7 @@ private:
   uint32_t m_nPackets;
   uint32_t m_totalRx;
   bool m_connected;
+  Ipv4Address m_localIpv4;
   std::list<Ptr<Socket> > m_socketList; //!< the accepted sockets
   
   uint32_t m_sent; //!< Counter for sent packets
