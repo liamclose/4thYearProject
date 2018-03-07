@@ -30,6 +30,7 @@ int sent = 0;
 //sent = sent++;
 
   std::map<std::string, std::vector<Address>> peers;
+  std::vector<std::string> cache;
   int tcpPort = 2020;
 
 NS_OBJECT_ENSURE_REGISTERED (P2PClient);
@@ -300,6 +301,9 @@ void P2PClient::ScheduleTx (Ptr<Socket> sock)
 void
 P2PClient::Send (void)
 {
+  if (m_count == 0) { //useful for server which makes no initial reqs
+    return;
+  }
   NS_LOG_FUNCTION (this);
   NS_ASSERT (m_sendEvent.IsExpired ());
   SeqTsHeader seqTs;
@@ -380,6 +384,7 @@ void P2PClient::UpdatePeers(std::string received) {
   void P2PClient::HandleTcp (Ptr<Socket> socket) {
     NS_LOG_FUNCTION (this << socket);
       Ptr<Packet> packet;
+      Ptr<Packet> p;
   Address from;
   while ((packet = socket->RecvFrom (from)))
     {
@@ -416,6 +421,8 @@ void P2PClient::UpdatePeers(std::string received) {
         SendPacket(socket);
       } else {
         NS_LOG_INFO("Got data, updating local cache");
+        std::vector<std::string>::iterator it = cache.begin();
+        cache.insert(it, "lol");
       }
     }
   }
