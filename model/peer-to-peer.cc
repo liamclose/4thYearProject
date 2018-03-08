@@ -309,6 +309,9 @@ P2PClient::Send (void)
   SeqTsHeader seqTs;
   seqTs.SetSeq (m_sent);
   uint8_t start[12] = {0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80, 0x00, 0x00, 0x00, 0x00};
+  if (m_sent==m_packets.size()) {
+    return;
+  }
   std::string s = m_packets[m_sent];
   uint8_t* send = new uint8_t[m_size+12];
   std::fill(send, send+m_size+12, 0x00);
@@ -325,10 +328,12 @@ P2PClient::Send (void)
     {
       peerAddressStringStream << Ipv4Address::ConvertFrom (m_peerAddress);
     }
-  else if (Ipv6Address::IsMatchingType (m_peerAddress))
-    {
+  else if (Ipv6Address::IsMatchingType (m_peerAddress)) {
       peerAddressStringStream << Ipv6Address::ConvertFrom (m_peerAddress);
     }
+  Ptr<Ipv4> ipv4 = this->m_node->GetObject<Ipv4>();
+      m_localIpv4  =ipv4->GetAddress(1,0).GetLocal();
+  NS_LOG_INFO("About to try to send" << m_localIpv4);
     if ((m_socket->Send (p)) >= 0)
       {
         p->CopyData(buffer, m_size);
@@ -369,8 +374,8 @@ void P2PClient::UpdatePeers(std::string received) {
       it = a.end();
       Ptr<Ipv4> ipv4 = this->m_node->GetObject<Ipv4>();
       m_localIpv4  =ipv4->GetAddress(1,0).GetLocal();
-
-      Address A = InetSocketAddress(parts.at(i).c_str(), std::stoi(parts.at(i+1)));
+      NS_LOG_INFO(parts.at(i));
+      Address A = InetSocketAddress(parts.at(i).c_str(), 2020);//std::stoi(parts.at(i+1)));
       if (!(InetSocketAddress::ConvertFrom(A).GetIpv4() ==m_localIpv4)) {
         NS_LOG_INFO("Found a peer" << InetSocketAddress::ConvertFrom(A).GetIpv4());
         a.insert(it, A);
@@ -388,6 +393,7 @@ void P2PClient::UpdatePeers(std::string received) {
   Address from;
   while ((packet = socket->RecvFrom (from)))
     {
+      NS_LOG_INFO("while");
       if (packet->GetSize () == 0)
         { //EOF
           break;
@@ -423,6 +429,7 @@ void P2PClient::UpdatePeers(std::string received) {
         NS_LOG_INFO("Got data, updating local cache");
         std::vector<std::string>::iterator it = cache.begin();
         cache.insert(it, "lol");
+        NS_LOG_INFO("not here");
       }
     }
   }
@@ -475,6 +482,7 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
                 NS_LOG_INFO("Dealt with connect request");
                 break;
           case(1):
+            NS_LOG_INFO("Received announce response");
             UpdatePeers(std::string((char*) buffer+1));
             SetupTCPConnections();
             break;

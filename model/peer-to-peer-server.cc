@@ -239,9 +239,11 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
 void
 P2PServer::StartApplication (void)
 {
-
+ Ptr<Ipv4> ipv4 = this->m_node->GetObject<Ipv4>();
+    Ipv4Address  m_localIpv4  =ipv4->GetAddress(1,0).GetLocal();
   //TODO server needs to be added to list...means we need to keep track of it somehow?
   NS_LOG_FUNCTION (this);
+  NS_LOG_INFO( "Starting Server" << (Simulator::Now ()).GetSeconds () << m_localIpv4);
   if (m_socket == 0)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
