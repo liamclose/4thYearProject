@@ -1,4 +1,4 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
+/* -*- Mode:C++; c-file-style:"gnu"; sindent-tabs-mode:nil; -*- */
 
 #include "ns3/log.h"
 #include "ns3/ipv4-address.h"
@@ -112,9 +112,10 @@ P2PServer::GetReceived (void) const
 				   std::istream_iterator<std::string>());
     std::vector<Address> a;
     std::vector<Address>::iterator it;
-    if (torrents.count(parts[1])!=0) {
-	a = torrents.at(parts[1]);
-        torrents.erase(parts[1]);
+    std::string filename = parts[1] + " " + parts[2];
+    if (torrents.count(filename)!=0) {
+	a = torrents.at(filename);
+        torrents.erase(filename);
 
     } else {
       it = a.begin();
@@ -127,12 +128,12 @@ P2PServer::GetReceived (void) const
     a.insert(it, from);
     std::set<Address> st = std::set<Address>(a.begin(), a.end());
     a = std::vector<Address>(st.begin(), st.end());
-    torrents.insert(std::pair<std::string, std::vector<Address>>(parts[1], a));
+    torrents.insert(std::pair<std::string, std::vector<Address>>(filename, a));
     //return all addresses
     //limit?
     std::string reply;
     NS_LOG_INFO("Formatting response" << a.size() << parts[0] << parts[1] << parts[2]);
-    reply += parts[1];
+    reply += filename;
     reply += " ";
     for (uint8_t i=0; i < a.size(); i++) {
       NS_LOG_INFO(":( " << a.at(i)<< InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4() << InetSocketAddress::ConvertFrom(a.at(i)).GetPort());
@@ -176,9 +177,7 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
       std::copy(buffer,buffer+size,send);
       //do things based on a connect
       send[0] = 0; //first bit signifies connect, in real torrent other information also added
-      NS_LOG_INFO("connect request received");
-      //need to send reply, contents are ehhh
-      
+      NS_LOG_INFO("connect request received");      
       break;
     case(1):
       //do things based on an announce
@@ -200,7 +199,7 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
 	std::copy(temp.c_str(), temp.c_str()+temp.size(), send+1);
 	// }
       //if nothing left move from leaching to seeding
-
+        std::cout << "Server: " <<temp << "\n";
       
       
       break;
@@ -213,16 +212,20 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
       //yeah that actually probably makes the most sense
       break;
   }
-  
+  m_socket->Connect (from);
   SeqTsHeader seqTs;
   seqTs.SetSeq (m_sent);
+  NS_LOG_INFO(seqTs);
   Ptr<Packet> p = CreateReplyPacket(send, 1012);
   p->AddHeader(seqTs);
+
+  NS_LOG_INFO(p->PeekHeader(seqTs));
   m_sent++;
-  if ((m_socket->SendTo (p,0,from)) >= 0)
+  if (m_socket->Send (p))
     {
       NS_LOG_INFO ("TraceDelay TX " << 1012 << " bytes to "
-                                    << InetSocketAddress::ConvertFrom (from).GetIpv4 () << " Uid: "
+                                    << InetSocketAddress::ConvertFrom (from).GetIpv4 () << " Port: "
+                   << InetSocketAddress::ConvertFrom (from).GetPort () << " Uid: "
                                     << p->GetUid () << " Time: "
                                     << (Simulator::Now ()).GetSeconds ());
 
@@ -230,7 +233,8 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
   else
     {
       NS_LOG_INFO ("Error while sending " << 125 << " bytes to "
-		   << from);
+		   << InetSocketAddress::ConvertFrom (from).GetIpv4 () << " " << InetSocketAddress::IsMatchingType(from)<<" "
+                     << InetSocketAddress::ConvertFrom (from).GetPort());
     }
 
   //  m_socket->SendTo(p,0,from);
@@ -293,6 +297,7 @@ void P2PServer::HandleRead (Ptr<Socket> socket)
   while ((packet = socket->RecvFrom (from)))
     { if (packet->GetSize () > 0)
         {
+          
           SeqTsHeader seqTs;
           
           packet->RemoveHeader (seqTs);
@@ -302,6 +307,7 @@ void P2PServer::HandleRead (Ptr<Socket> socket)
           packet->CopyData(buffer, size);
           NS_LOG_INFO ("TraceDelay: RX " << packet->GetSize () <<
                           " bytes from "<< InetSocketAddress::ConvertFrom (from).GetIpv4 () <<
+                       " Port: " << InetSocketAddress::ConvertFrom (from).GetPort () <<
                            " Sequence Number: " << currentSequenceNumber <<
                            " Uid: " << packet->GetUid () <<
                            " Packet: " << buffer <<

@@ -60,7 +60,7 @@ protected:
   virtual void DoDispose (void);
 
 private:
-  void UpdatePeers(std::string received);
+  std::string UpdatePeers(std::string received);
   void HandleRead(Ptr<Socket> socket);
   void HandleTcp(Ptr<Socket> socket);
   void HandlePeerClose(Ptr<Socket> socket);
@@ -68,9 +68,10 @@ private:
   void HandleConnect(Ptr<Socket> socket);
   void HandleConnectError(Ptr<Socket> socket);
   void HandleAccept(Ptr<Socket> socket, const Address& from);
-  void SetupTCPConnections(void);
-  void SendPacket(Ptr<Socket> sock);
-  void ScheduleTx(Ptr<Socket> sock);
+  void SetupTCPConnections(std::string filename);
+  void SendPacket(Ptr<Socket> sock, Ptr<Packet> packet);
+  void ScheduleTx(Ptr<Socket> sock, Ptr<Packet> packet);
+  void ExpireCache(void);
   virtual void StartApplication (void);
   virtual void StopApplication (void);
 
@@ -80,6 +81,7 @@ private:
   void Send (void);
 
   uint32_t m_count; //!< Maximum number of packets the application will send
+  uint32_t m_mode;
   Time m_interval; //!< Packet inter-send time
   uint32_t m_size; //!< Size of the sent packet (including the SeqTsHeader)
   uint32_t m_received;

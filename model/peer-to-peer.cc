@@ -30,8 +30,9 @@ int sent = 0;
 //sent = sent++;
 
   std::map<std::string, std::vector<Address>> peers;
-  std::vector<std::string> cache;
+  std::set<std::string> cache;
   int tcpPort = 2020;
+  std::string file;
 
 NS_OBJECT_ENSURE_REGISTERED (P2PClient);
 
@@ -53,6 +54,11 @@ P2PClient::GetTypeId (void)
                    "The time to wait between packets", TimeValue (Seconds (2.0)),
                    MakeTimeAccessor (&P2PClient::m_interval),
                    MakeTimeChecker ())
+    .AddAttribute("Mode",
+                  "Whether this is serving requests or has a local cache.",
+                  UintegerValue(0),
+                  MakeUintegerAccessor (&P2PClient::m_mode),
+                  MakeUintegerChecker<uint32_t>())
     .AddAttribute ("RemoteAddress",
                    "The destination Address of the outbound packets",
                    AddressValue (),
@@ -86,7 +92,7 @@ P2PClient::P2PClient ()
   m_dataRate =DataRate("2Mbps");
   m_packetSize = 512;
   m_socket_tcp = 0;
-  m_nPackets = 600;
+  m_nPackets = 2;
   m_connected = false;
   m_packets = std::vector<std::string>(); 
   m_sendEvent = EventId ();
@@ -140,7 +146,7 @@ P2PClient::StartApplication (void)
             {
               NS_FATAL_ERROR ("Failed to bind socket");
             }
-          m_socket->Connect (InetSocketAddress (Ipv4Address::ConvertFrom(m_peerAddress), m_peerPort));
+                    m_socket->Connect (InetSocketAddress (Ipv4Address::ConvertFrom(m_peerAddress), m_peerPort));
         }
       else if (Ipv6Address::IsMatchingType(m_peerAddress) == true)
         {
@@ -186,6 +192,7 @@ P2PClient::StartApplication (void)
       
         }
      }
+  NS_LOG_INFO("Setting up callback in client" << m_socket);
   //this is how the client receives responses from the server
   m_socket->SetRecvCallback (MakeCallback (&P2PClient::HandleRead, this));
   //theoretically this would be how the client gets the data...it doesn't work though
@@ -202,8 +209,9 @@ P2PClient::StartApplication (void)
   //  m_socket->SetRecvCallback (MakeNullCallback<void, Ptr<Socket> > ());
   m_socket->SetAllowBroadcast (true);
   m_socket_tcp->Listen();
+ 
   //m_socket_tcp->ShutdownSend ();
-  m_sendEvent = Simulator::Schedule (Seconds (0.0), &P2PClient::Send, this);
+  m_sendEvent = Simulator::Schedule (Seconds (0.5), &P2PClient::Send, this);
 }
 
 
@@ -223,6 +231,7 @@ void P2PClient::SetMessages(std::vector<std::string> messages) {
 void P2PClient::HandlePeerClose (Ptr<Socket> socket)
 {
   NS_LOG_FUNCTION (this << socket);
+  std::cout << "closing connection";
 }
  
 void P2PClient::HandlePeerError (Ptr<Socket> socket)
@@ -241,9 +250,11 @@ void P2PClient::HandleConnect (Ptr<Socket> socket)
   NS_LOG_INFO("Fucking finally");
     socket->SetRecvCallback (MakeCallback (&P2PClient::HandleTcp, this));
   //m_socketList.push_back (s);
-  uint8_t buffer[1];
-  buffer[0] = 0; //check protocol
-  socket->Send(Create<Packet>(buffer, 1));
+    uint8_t buffer[1 + file.size()];
+  buffer[0] = 0;
+  std::copy(file.c_str(), file.c_str()+file.size(), buffer+1);//check protocol
+  std::cout <<"sending: " << buffer << buffer+1 << "\n";
+  socket->Send(Create<Packet>(buffer, 2+file.size()));
 
 }
  
@@ -254,47 +265,56 @@ void P2PClient::HandleAccept (Ptr<Socket> s, const Address& from)
   NS_LOG_INFO("Handling an accept??" << InetSocketAddress::ConvertFrom(from).GetIpv4() << InetSocketAddress::ConvertFrom(from).GetPort());
   s->SetRecvCallback (MakeCallback (&P2PClient::HandleTcp, this));
   m_socketList.push_back (s);
-  s->Send(Create<Packet>(m_packetSize));
+  //  s->Send(Create<Packet>(m_packetSize));
 }
 
 
-  void P2PClient::SetupTCPConnections() {
+void P2PClient::SetupTCPConnections(std::string filename) {
     NS_LOG_FUNCTION(this);
-    std::vector<Address> a = peers.at("3018390");
+    std::cout << file << peers.count(filename) << "\n";
+    std::vector<Address> a = peers.at(filename);
     for (uint i=0;i<a.size(); i++) {
        TypeId tid = TypeId::LookupByName ("ns3::TcpSocketFactory");
        Ptr<Socket> s2 = Socket::CreateSocket (GetNode (), tid);
-      s2->SetConnectCallback (
-                                    MakeCallback (&P2PClient::HandleConnect, this),
+       s2->SetConnectCallback (MakeCallback (&P2PClient::HandleConnect, this),
                                     MakeCallback (&P2PClient::HandleConnectError, this));
       s2->Connect(InetSocketAddress (InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4(), tcpPort));
     }
     //P2PClient::SendPacket();
   }
 
-void P2PClient::SendPacket (Ptr<Socket> sock)
+
+
+void P2PClient::SendPacket (Ptr<Socket> sock, Ptr<Packet> packet)
 {
-  uint8_t buffer[m_packetSize];
-  buffer[0] = 1;
   NS_LOG_INFO("tcp send");
-  Ptr<Packet> packet = Create<Packet> (buffer, m_packetSize);
-  //maybe we care about packet info?
+  int size = packet->GetSize();
+      uint8_t *buffer = new uint8_t[size];
+      std::fill(buffer, buffer+size, 0x00);
+      packet->CopyData(buffer, size);
+      std::cout <<"Sending packet: " <<buffer << "\n";
   sock->Send (packet);
+  if (buffer[0] ==0) {
+    buffer[0] = 1;
+  } else {
+    buffer[0] = 0;
+  }
   NS_LOG_INFO(packet->GetUid());
   if (++m_tcpSent < m_nPackets)
     {
-      ScheduleTx (sock);
+      ScheduleTx (sock, Create<Packet>(buffer, size));
     }
 }
 
 
-void P2PClient::ScheduleTx (Ptr<Socket> sock)
+void P2PClient::ScheduleTx (Ptr<Socket> sock, Ptr<Packet> packet)
   { if (true)
   //  if (m_running)
     {
       Time tNext (Seconds (m_packetSize * 8 / static_cast<double> (m_dataRate.GetBitRate ())));
       NS_LOG_INFO(tNext);
-      m_sendEvent = Simulator::Schedule (tNext, &P2PClient::SendPacket, this, sock);
+      //Ptr<Packet> packet = Create<Packet>();
+      m_sendEvent = Simulator::Schedule (tNext, &P2PClient::SendPacket, this, sock, packet);
     }
 }
 
@@ -312,11 +332,12 @@ P2PClient::Send (void)
   if (m_sent==m_packets.size()) {
     return;
   }
-  std::string s = m_packets[m_sent];
+  
+  file = m_packets[m_sent];
   uint8_t* send = new uint8_t[m_size+12];
   std::fill(send, send+m_size+12, 0x00);
   std::copy (start, start+12, send);
-  std::copy (s.c_str(), s.c_str()+s.size(), send+12);
+  std::copy (file.c_str(), file.c_str()+file.size(), send+12);
   send[95]=1;
   Ptr<Packet> p = Create<Packet> (send, m_size-(8+4)); // 8+4 : the size of the seqTs header
   uint8_t *buffer = new uint8_t[m_size];
@@ -333,7 +354,7 @@ P2PClient::Send (void)
     }
   Ptr<Ipv4> ipv4 = this->m_node->GetObject<Ipv4>();
       m_localIpv4  =ipv4->GetAddress(1,0).GetLocal();
-  NS_LOG_INFO("About to try to send" << m_localIpv4);
+      NS_LOG_INFO("About to try to send" << this->m_node->GetDevice(0));
     if ((m_socket->Send (p)) >= 0)
       {
         p->CopyData(buffer, m_size);
@@ -358,23 +379,25 @@ P2PClient::Send (void)
 }
 
 
-void P2PClient::UpdatePeers(std::string received) {
+std::string P2PClient::UpdatePeers(std::string received) {
     NS_LOG_FUNCTION(this);
     std::istringstream iss(received);
     std::vector<std::string> parts(( std::istream_iterator<std::string>(iss)),
 				   std::istream_iterator<std::string>());
     std::vector<Address> a;
     std::vector<Address>::iterator it;
-    if (peers.count("3018390")!=0) {
-      peers.erase("3018390");
+    std::string filename = " " + parts[0] + " " +parts[1];
+    if (peers.count(filename)!=0) {
+      peers.erase(filename);
     }
-    
+    std::cout << "File: " << filename <<"\n";
     //it = a.begin();
-    for(uint i = 1; i<parts.size()-1; i=i+2) {
+    for(uint i = 2; i<parts.size()-1; i=i+2) {
       it = a.end();
+      std::cout << i;
+      std::cout << "parts: " << parts.at(i) <<"\n";
       Ptr<Ipv4> ipv4 = this->m_node->GetObject<Ipv4>();
       m_localIpv4  =ipv4->GetAddress(1,0).GetLocal();
-      NS_LOG_INFO(parts.at(i));
       Address A = InetSocketAddress(parts.at(i).c_str(), 2020);//std::stoi(parts.at(i+1)));
       if (!(InetSocketAddress::ConvertFrom(A).GetIpv4() ==m_localIpv4)) {
         NS_LOG_INFO("Found a peer" << InetSocketAddress::ConvertFrom(A).GetIpv4());
@@ -383,17 +406,18 @@ void P2PClient::UpdatePeers(std::string received) {
         NS_LOG_INFO(InetSocketAddress::ConvertFrom(A).GetIpv4() << m_localIpv4);
       }
     }
-    peers.insert(std::pair<std::string, std::vector<Address>>(parts.at(0), a));
+    std::cout << "inserting:" <<filename <<"\n";
+    peers.insert(std::pair<std::string, std::vector<Address>>(filename, a));
+    return filename;
 }
 
   void P2PClient::HandleTcp (Ptr<Socket> socket) {
     NS_LOG_FUNCTION (this << socket);
-      Ptr<Packet> packet;
-      Ptr<Packet> p;
-  Address from;
+    Ptr<Packet> packet;
+    Ptr<Packet> p;
+    Address from;
   while ((packet = socket->RecvFrom (from)))
     {
-      NS_LOG_INFO("while");
       if (packet->GetSize () == 0)
         { //EOF
           break;
@@ -419,27 +443,56 @@ void P2PClient::UpdatePeers(std::string received) {
         }
       //logging, enable later?
       //m_rxTrace (packet, from);
+      std::cout <<"??";
       int size = packet->GetSize();
       uint8_t *buffer = new uint8_t[size];
+      std::fill(buffer, buffer+size, 0x00);
       packet->CopyData(buffer, size);
-      if (buffer[0]==0) {
-        NS_LOG_INFO("Data req");
-        SendPacket(socket);
-      } else {
-        NS_LOG_INFO("Got data, updating local cache");
-        std::vector<std::string>::iterator it = cache.begin();
-        cache.insert(it, "lol");
-        NS_LOG_INFO("not here");
-      }
+      std::cout << "Buffer contents: " << buffer << buffer +2 << m_sent << "\n";
+      std::cout << "Action: " << buffer[0] << size<<"\n";
+                                                                                                          std::string data((char*) buffer, size);
+      data = data.substr(1,size);
+        if (buffer[0]==0) {        
+        std::cout <<"File requested is: " << data <<"\n";
+
+        if (cache.count(data)!=0||m_mode==1) {
+          buffer[0] = 1;
+          packet = Create<Packet>(buffer, size);
+        } else {
+          buffer[0] = 2;
+          packet = Create<Packet>(buffer, size);
+        }
+        SendPacket(socket,packet);
+      } else if (buffer[0]==1){
+        NS_LOG_INFO("Got data, updating local cache" << buffer);
+        std::cout<<"wtf";
+        std::set<std::string>::iterator it = cache.begin();
+        cache.insert(it, data);
+        std::cout << "Data get\n";
+        // SendPacket(socket,packet);
+        } else {
+          std::cout << "Expired cache, need to do something about that\n";
+        }
+     
     }
+           std::cout <<":(\n" ;
+        Simulator::Schedule (Seconds (0.0), &P2PClient::ExpireCache, this);
   }
+
+    void P2PClient::ExpireCache() {
+        std::cout <<"====================================\n";
+        if (cache.size()>0) {
+          cache.erase(cache.begin());
+        }
+      }
   
 void P2PClient::HandleRead (Ptr<Socket> socket) {
   NS_LOG_FUNCTION (this << socket);
   Ptr<Packet> packet;
   Address from;
   while ((packet = socket->RecvFrom (from)))
-    { if (packet->GetSize () > 0)
+    { std::cout << ":/\n";
+      if (packet->GetSize () > 0)
         {
           SeqTsHeader seqTs;
           packet->RemoveHeader (seqTs);
@@ -483,8 +536,9 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
                 break;
           case(1):
             NS_LOG_INFO("Received announce response");
-            UpdatePeers(std::string((char*) buffer+1));
-            SetupTCPConnections();
+            std::cout <<"t";
+            std::string s = UpdatePeers(std::string((char*) buffer+1));
+            SetupTCPConnections(s);
             break;
           }
 
