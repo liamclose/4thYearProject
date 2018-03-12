@@ -151,11 +151,13 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
     //otherwise....
   int size = pckt->GetSize();
   uint8_t *buffer = new uint8_t[size];
+        std::fill(buffer, buffer+size, 0x00);
   pckt->CopyData(buffer, size);
   //std::copy(buffer+12, buffer+size, buffer);
   //NS_LOG_INFO(buffer);
   int action = ParseAction(buffer);
    uint8_t send[1012];
+         std::fill(send, send+1012, 0x00);
   //  uint64_t numwant;
   int event;
   std::string temp;
@@ -286,6 +288,7 @@ void P2PServer::HandleRead (Ptr<Socket> socket)
           uint32_t currentSequenceNumber = seqTs.GetSeq ();
            int size = packet->GetSize();
           uint8_t *buffer = new uint8_t[size];
+                std::fill(buffer, buffer+size, 0x00);
           packet->CopyData(buffer, size);
           NS_LOG_INFO ("TraceDelay: RX " << packet->GetSize () <<
                           " bytes from "<< InetSocketAddress::ConvertFrom (from).GetIpv4 () <<

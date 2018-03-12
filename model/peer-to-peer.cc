@@ -258,6 +258,7 @@ void P2PClient::HandleConnect (Ptr<Socket> socket)
     socket->SetRecvCallback (MakeCallback (&P2PClient::HandleTcp, this));
   //m_socketList.push_back (s);
     uint8_t buffer[1 + file.size()];
+    std::fill(buffer, buffer+1+file.size(), 0x00);
   buffer[0] = 0;
   std::copy(file.c_str(), file.c_str()+file.size(), buffer+1);//check protocol
   //std::cout <<"sending: " << buffer << buffer+1 << "\n";
@@ -461,7 +462,7 @@ std::string P2PClient::UpdatePeers(std::string received) {
         if (buffer[0]==0) {        
           //std::cout <<"File requested is: " << data <<"\n";
 
-          if (cache.count(data)!=0/*||m_mode==1*/) {
+          if (cache.count(data)!=0||m_mode==1) {
           buffer[0] = 1;
           packet = Create<Packet>(buffer, size);
         } else {
@@ -500,6 +501,7 @@ void P2PClient::ExpireCache(std::string file) {
         }
                   std::stringstream peerAddressStringStream;
         uint8_t *buffer = new uint8_t[m_size-12];
+      std::fill(buffer, buffer+m_size-12, 0x00);
         buffer[11] = 1;
         buffer[83] = 3;
         SeqTsHeader seqTs;
@@ -528,6 +530,7 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
           uint32_t currentSequenceNumber = seqTs.GetSeq ();
            int size = packet->GetSize();
           uint8_t *buffer = new uint8_t[size];
+                std::fill(buffer, buffer+size, 0x00);
           packet->CopyData(buffer, size);
           NS_LOG_INFO ("TraceDelay: RX " << packet->GetSize () <<
                           " bytes from "<< InetSocketAddress::ConvertFrom (from).GetIpv4 () <<
