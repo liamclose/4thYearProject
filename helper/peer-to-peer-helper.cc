@@ -37,7 +37,7 @@ void P2PClientHelper::SetAttribute (std::string name, const AttributeValue &valu
 ApplicationContainer P2PClientHelper::Install (NodeContainer c, std::vector<std::string> messages)
 {
   ApplicationContainer apps;
-
+  NS_LOG_INFO("installing p2p");
   for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
     {
   NS_LOG_INFO(*i);

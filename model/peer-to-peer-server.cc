@@ -24,7 +24,7 @@ NS_LOG_COMPONENT_DEFINE ("P2PServer");
 
 NS_OBJECT_ENSURE_REGISTERED (P2PServer);
 
-  std::map<std::string, std::vector<Address>> torrents;
+  std::map<std::string, std::set<Address>> torrents;
 TypeId
 P2PServer::GetTypeId (void)
 {
@@ -99,19 +99,16 @@ P2PServer::GetReceived (void) const
   }
 
   int P2PServer::ParseAction(uint8_t* message) {
-    //uint8_t* buffer = new uint8_t[12];
-    NS_LOG_INFO(message[0]);
-    return message[11];
+     return message[11];
   }
 
   std::string P2PServer::AddTorrentReturnPeers(Address from, std::string received) {
      NS_LOG_FUNCTION(this);
     std::istringstream iss(received);
-    NS_LOG_INFO(from);
     std::vector<std::string> parts(( std::istream_iterator<std::string>(iss)),
 				   std::istream_iterator<std::string>());
-    std::vector<Address> a;
-    std::vector<Address>::iterator it;
+    std::set<Address> a;
+    std::set<Address>::iterator it;
     std::string filename = parts[1] + " " + parts[2];
     if (torrents.count(filename)!=0) {
 	a = torrents.at(filename);
@@ -121,27 +118,22 @@ P2PServer::GetReceived (void) const
       it = a.begin();
       Ptr<Ipv4> ipv4 =  this->m_node->GetObject<Ipv4>();
       Address local = (InetSocketAddress) ipv4->GetAddress(1,0).GetLocal();
-      NS_LOG_INFO("MY ADD: " << local);
       a.insert(it, local);
     }
     it = a.begin();
     a.insert(it, from);
-    std::set<Address> st = std::set<Address>(a.begin(), a.end());
-    a = std::vector<Address>(st.begin(), st.end());
-    torrents.insert(std::pair<std::string, std::vector<Address>>(filename, a));
+    torrents.insert(std::pair<std::string, std::set<Address>>(filename, a));
     //return all addresses
     //limit?
     std::string reply;
     NS_LOG_INFO("Formatting response" << a.size() << parts[0] << parts[1] << parts[2]);
     reply += filename;
     reply += " ";
-    for (uint8_t i=0; i < a.size(); i++) {
-      NS_LOG_INFO(":( " << a.at(i)<< InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4() << InetSocketAddress::ConvertFrom(a.at(i)).GetPort());
-      NS_LOG_INFO("Address" << InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4() << InetSocketAddress::ConvertFrom(a.at(i)).GetPort());
+    for (it = a.begin(); it != a.end(); it++) {
       std::ostringstream oss;
-      InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4().Print(oss);
+      InetSocketAddress::ConvertFrom((*it)).GetIpv4().Print(oss);
       std::stringstream ss;
-      ss << InetSocketAddress::ConvertFrom(a.at(i)).GetPort();
+      ss << InetSocketAddress::ConvertFrom((*it)).GetPort();
       //std::string temp = (std::string) InetSocketAddress::ConvertFrom(a.at(i)).GetIpv4();
       reply += oss.str();
       reply += " ";
@@ -163,11 +155,7 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
   //std::copy(buffer+12, buffer+size, buffer);
   //NS_LOG_INFO(buffer);
   int action = ParseAction(buffer);
-  NS_LOG_INFO("Action is: " << action);
-
-  //maybe need to account for bittorent magic bits?
-  //need to add another set of receive/sends for the connection establishment
-  uint8_t send[1024];
+   uint8_t send[1012];
   //  uint64_t numwant;
   int event;
   std::string temp;
@@ -190,38 +178,32 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
       // std::fill(buffer,buffer+buffer.size(), 0x00);
 
       send[0] = 1; //announce
-      //if (event==3) {
-	//remove torrent
-      //} else if (event==1) {
+      if (event==3) {
+	NS_LOG_INFO("Removing file, no reply needed.");
+        return;
+      } else if (event==2) {
       //TODO - change the stuff with the buffer add
-      temp = std::string((char*) buffer+11);
-      temp = AddTorrentReturnPeers(from, temp);
+        temp = std::string((char*) buffer+11);
+        temp = AddTorrentReturnPeers(from, temp);
 	std::copy(temp.c_str(), temp.c_str()+temp.size(), send+1);
-	// }
-      //if nothing left move from leaching to seeding
-        std::cout << "Server: " <<temp << "\n";
-      
-      
+      } else {
+        NS_LOG_INFO("Doing nothing");
+        return;
+      }      
       break;
     case(2):
       //do things based on a scrape might not do this?
-      NS_LOG_INFO("scrape");
+      NS_LOG_INFO("Scrape request in a normal torrent. We do nothing.");
       break;
-    case(3):
-      //ordinary ass requests it has to handle maybe this should be a separate app?
-      //yeah that actually probably makes the most sense
-      break;
-  }
-  m_socket->Connect (from);
+   }
+  //  m_socket->Connect (from);
   SeqTsHeader seqTs;
   seqTs.SetSeq (m_sent);
   NS_LOG_INFO(seqTs);
   Ptr<Packet> p = CreateReplyPacket(send, 1012);
   p->AddHeader(seqTs);
-
-  NS_LOG_INFO(p->PeekHeader(seqTs));
   m_sent++;
-  if (m_socket->Send (p))
+  if (m_socket->SendTo (p,0,from))
     {
       NS_LOG_INFO ("TraceDelay TX " << 1012 << " bytes to "
                                     << InetSocketAddress::ConvertFrom (from).GetIpv4 () << " Port: "
@@ -261,7 +243,7 @@ P2PServer::StartApplication (void)
     }
 
   m_socket->SetRecvCallback (MakeCallback (&P2PServer::HandleRead, this));
-
+  m_socket->SetAllowBroadcast(true);
   if (m_socket6 == 0)
     {
       TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
@@ -316,9 +298,7 @@ void P2PServer::HandleRead (Ptr<Socket> socket)
                            " Delay: " << Simulator::Now () - seqTs.GetTs ());
           m_lossCounter.NotifyReceived (currentSequenceNumber);
           m_received++;
-          NS_LOG_INFO(InetSocketAddress::ConvertFrom(from).GetPort());
-	 
-	  Reply(from,packet);
+      	  Reply(from,packet);
         } else {
                 NS_LOG_INFO("what the fuck"); 
 }

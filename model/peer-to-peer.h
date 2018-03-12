@@ -71,7 +71,7 @@ private:
   void SetupTCPConnections(std::string filename);
   void SendPacket(Ptr<Socket> sock, Ptr<Packet> packet);
   void ScheduleTx(Ptr<Socket> sock, Ptr<Packet> packet);
-  void ExpireCache(void);
+  void ExpireCache(std::string file);
   virtual void StartApplication (void);
   virtual void StopApplication (void);
 
@@ -85,6 +85,7 @@ private:
   Time m_interval; //!< Packet inter-send time
   uint32_t m_size; //!< Size of the sent packet (including the SeqTsHeader)
   uint32_t m_received;
+  uint32_t m_cacheTime;
   ns3::DataRate m_dataRate;
   uint32_t m_packetSize;
   uint32_t m_tcpSent;
