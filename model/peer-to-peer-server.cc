@@ -126,7 +126,6 @@ P2PServer::GetReceived (void) const
     //return all addresses
     //limit?
     std::string reply;
-    NS_LOG_INFO("Formatting response" << a.size() << parts[0] << parts[1] << parts[2]);
     reply += filename;
     reply += " ";
     for (it = a.begin(); it != a.end(); it++) {
@@ -154,8 +153,7 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
         std::fill(buffer, buffer+size, 0x00);
   pckt->CopyData(buffer, size);
   //std::copy(buffer+12, buffer+size, buffer);
-  //NS_LOG_INFO(buffer);
-  int action = ParseAction(buffer);
+   int action = ParseAction(buffer);
    uint8_t send[1012];
          std::fill(send, send+1012, 0x00);
   //  uint64_t numwant;
@@ -167,21 +165,14 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
       std::copy(buffer,buffer+size,send);
       //do things based on a connect
       send[0] = 0; //first bit signifies connect, in real torrent other information also added
-      NS_LOG_INFO("connect request received");      
       break;
     case(1):
       //do things based on an announce
-      //receive - check - announce - reply
-      //check for 0 bytes left?
-      
-      NS_LOG_INFO("Announce request received" <<size); //might need to limit size
       event = buffer[83]; //might not need
-      NS_LOG_INFO("Event is: " << event);
       // std::fill(buffer,buffer+buffer.size(), 0x00);
 
       send[0] = 1; //announce
       if (event==3) {
-	NS_LOG_INFO("Removing file, no reply needed.");
         return;
       } else if (event==2) {
       //TODO - change the stuff with the buffer add
@@ -201,7 +192,6 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
   //  m_socket->Connect (from);
   SeqTsHeader seqTs;
   seqTs.SetSeq (m_sent);
-  NS_LOG_INFO(seqTs);
   Ptr<Packet> p = CreateReplyPacket(send, 1012);
   p->AddHeader(seqTs);
   m_sent++;
@@ -295,7 +285,6 @@ void P2PServer::HandleRead (Ptr<Socket> socket)
                        " Port: " << InetSocketAddress::ConvertFrom (from).GetPort () <<
                            " Sequence Number: " << currentSequenceNumber <<
                            " Uid: " << packet->GetUid () <<
-                           " Packet: " << buffer <<
                            " TXtime: " << seqTs.GetTs () <<
                            " RXtime: " << Simulator::Now () <<
                            " Delay: " << Simulator::Now () - seqTs.GetTs ());

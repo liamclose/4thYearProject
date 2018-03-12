@@ -33,14 +33,13 @@ int sent = 0;
   std::set<std::string> cache;
   int tcpPort = 2020;
   std::string file;
+  bool m_running = true;
 
 NS_OBJECT_ENSURE_REGISTERED (P2PClient);
 
 TypeId
 P2PClient::GetTypeId (void)
-{
- // messages.Add("hello")
-  
+{  
   static TypeId tid = TypeId ("ns3::P2PClient")
     .SetParent<Application> ()
     .SetGroupName("Applications")
@@ -61,7 +60,7 @@ P2PClient::GetTypeId (void)
                   MakeUintegerChecker<uint32_t>())
     .AddAttribute("CacheTime",
                   "How long chunks of data are cached for, in milliseconds.",
-                  UintegerValue(1000),
+                  UintegerValue(100),
                   MakeUintegerAccessor (&P2PClient::m_cacheTime),
                   MakeUintegerChecker<uint32_t>())
     .AddAttribute ("RemoteAddress",
@@ -308,8 +307,8 @@ void P2PClient::SendPacket (Ptr<Socket> sock, Ptr<Packet> packet)
 
 
 void P2PClient::ScheduleTx (Ptr<Socket> sock, Ptr<Packet> packet)
-  { if (true)
-  //  if (m_running)
+  {
+    if (m_running)
     {
       Time tNext (Seconds (m_packetSize * 8 / static_cast<double> (m_dataRate.GetBitRate ())));
       //Ptr<Packet> packet = Create<Packet>();
@@ -324,11 +323,11 @@ P2PClient::Send (void)
     return;
   }
   NS_LOG_FUNCTION (this);
-  NS_LOG_INFO("Send fn" <<  Simulator::Now ().GetSeconds () << " "<<m_sent <<" " <<m_packets.size());
-  NS_ASSERT (m_sendEvent.IsExpired ());
+  //  NS_ASSERT (m_sendEvent.IsExpired ());
   SeqTsHeader seqTs;
   seqTs.SetSeq (m_sent);
   uint8_t start[12] = {0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80, 0x00, 0x00, 0x00, 0x00};
+  NS_LOG_UNCOND(m_sent);
   if (m_sent==m_packets.size()) {
     return;
   }
@@ -352,7 +351,6 @@ P2PClient::Send (void)
     }
   Ptr<Ipv4> ipv4 = this->m_node->GetObject<Ipv4>();
       m_localIpv4  =ipv4->GetAddress(1,0).GetLocal();
-      NS_LOG_INFO("ipv4" << m_socket << Simulator::Now().GetSeconds());
       if ((m_socket->Send (p)) >= 0)
       {
         ++m_sent;
@@ -367,21 +365,13 @@ P2PClient::Send (void)
       NS_LOG_INFO ("Error while sending " << m_size << " bytes to "
                                           << peerAddressStringStream.str ());
     }
-
-
-  if (m_sent < m_count)
-    {
-      NS_LOG_INFO("NotDone yet");
-      //      m_sendEvent = Simulator::Schedule (m_interval, &P2PClient::Send, this);
-    }
 }
 
 void P2PClient::ScheduleEvents(std::vector<std::string> events) {
      std::vector<std::string>::iterator itEvents = events.begin();
      for (; itEvents != events.end(); itEvents++) {
        int eventTime = atoi((*itEvents).c_str());
-       NS_LOG_INFO("Scheduling event at: " << eventTime);
-       Simulator::Schedule (MilliSeconds(eventTime), &P2PClient::Send, this);
+       Simulator::Schedule (Seconds(eventTime), &P2PClient::Send, this);
      }
 }
 
@@ -421,6 +411,7 @@ std::string P2PClient::UpdatePeers(std::string received) {
     Ptr<Packet> p;
     Address from;
     std::string data;
+    uint64_t prev = m_sent;
   while ((packet = socket->RecvFrom (from)))
     {
       if (packet->GetSize () == 0)
@@ -456,7 +447,6 @@ std::string P2PClient::UpdatePeers(std::string received) {
                                               //      data = data.substr(1,size);
         if (buffer[0]==0) {        
           //std::cout <<"File requested is: " << data <<"\n";
-          NS_LOG_INFO("Received request for " << data);
           if (cache.count(data)!=0||m_mode==1) {
           buffer[0] = 1;
           packet = Create<Packet>(buffer, size);
@@ -466,28 +456,24 @@ std::string P2PClient::UpdatePeers(std::string received) {
         }
         ScheduleTx (socket, Create<Packet>(buffer, size));
       } else if (buffer[0]==1){
-        NS_LOG_INFO("Got data, updating local cache.");
         std::set<std::string>::iterator it = cache.begin();
         cache.insert(it, data);
         buffer[0] = 0;
         if (++m_tcpSent < m_nPackets) { //if we don't yet have all the data, request next bit
           ScheduleTx (socket, Create<Packet>(buffer, size));
         } else { //otherwise set the expiry.
-          Simulator::Schedule (MilliSeconds (m_cacheTime), &P2PClient::ExpireCache, this, data);    
+          Simulator::Schedule (Seconds (m_cacheTime), &P2PClient::ExpireCache, this, data);    
         }
-      } else {
-          std::cout << "Expired cache, need to do something about that\n";
-          m_sent = m_sent -1;
-               NS_LOG_INFO("------------------------------------------Have now sent " << m_sent);
+        } else if (m_sent!=0){
+          m_sent = prev -1;
+          m_running = false;
           Simulator::Schedule (MilliSeconds (0.0), &P2PClient::Send, this);    
-      }
-     
+        } 
     }
 
   }
 
 void P2PClient::ExpireCache(std::string file) {
-  NS_LOG_INFO("Expiring " << file << " from cache.");
         if (cache.size()>0) {
           cache.erase(file);
         } else {
@@ -530,8 +516,7 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
           NS_LOG_INFO ("TraceDelay: RX " << packet->GetSize () <<
                           " bytes from "<< InetSocketAddress::ConvertFrom (from).GetIpv4 () <<
                            " Sequence Number: " << currentSequenceNumber <<
-                           " Uid: " << packet->GetUid () <<
-                           " Packet: " << buffer <<
+                       " Uid: " << packet->GetUid () <<
                            " TXtime: " << seqTs.GetTs () <<
                            " RXtime: " << Simulator::Now () <<
                            " Delay: " << Simulator::Now () - seqTs.GetTs ());
@@ -559,11 +544,10 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
                   NS_LOG_INFO ("Error while sending " << m_size << " bytes to "
                                           << peerAddressStringStream.str ());
                 }
-                NS_LOG_INFO("Dealt with connect request");
                 break;
           case(1):
-            NS_LOG_INFO("Received announce response");
             s = UpdatePeers(std::string((char*) buffer+1));
+            m_running =true;
             SetupTCPConnections(s);
             break;
           default:
