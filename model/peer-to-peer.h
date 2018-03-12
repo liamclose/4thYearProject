@@ -39,6 +39,7 @@ public:
 
   P2PClient(std::vector<std::string> packets);
 
+  void ScheduleEvents(std::vector<std::string> events);
   virtual ~P2PClient ();
 
   /**

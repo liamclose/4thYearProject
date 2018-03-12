@@ -174,7 +174,7 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
       //receive - check - announce - reply
       //check for 0 bytes left?
       
-      NS_LOG_INFO("announce request received" <<size); //might need to limit size
+      NS_LOG_INFO("Announce request received" <<size); //might need to limit size
       event = buffer[83]; //might not need
       NS_LOG_INFO("Event is: " << event);
       // std::fill(buffer,buffer+buffer.size(), 0x00);

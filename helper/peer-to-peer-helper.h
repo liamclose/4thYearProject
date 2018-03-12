@@ -22,7 +22,7 @@ class P2PClientHelper {
     P2PClientHelper(Address address, uint16_t port);
     P2PClientHelper(Address address);
     void SetAttribute(std::string name, const AttributeValue &value);
-    ApplicationContainer Install (NodeContainer c, std::vector<std::string> messages);
+  ApplicationContainer Install (NodeContainer c, std::vector<std::string> messages, std::vector<std::string> events);
 
 
   private:

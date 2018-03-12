@@ -34,7 +34,7 @@ void P2PClientHelper::SetAttribute (std::string name, const AttributeValue &valu
   m_factory.Set (name, value);
 }
 
-ApplicationContainer P2PClientHelper::Install (NodeContainer c, std::vector<std::string> messages)
+  ApplicationContainer P2PClientHelper::Install (NodeContainer c, std::vector<std::string> messages, std::vector<std::string> events)
 {
   ApplicationContainer apps;
   NS_LOG_INFO("installing p2p");
@@ -43,6 +43,7 @@ ApplicationContainer P2PClientHelper::Install (NodeContainer c, std::vector<std:
   NS_LOG_INFO(*i);
       Ptr<Node> node = *i;
       Ptr<P2PClient> client = m_factory.Create<P2PClient> ();
+      client->ScheduleEvents(events);
       (*client).SetMessages(messages);
   NS_LOG_INFO(client);
       node->AddApplication (client);
@@ -73,7 +74,7 @@ P2PServerHelper::SetAttribute (std::string name, const AttributeValue &value)
 ApplicationContainer
 P2PServerHelper::Install (NodeContainer c)
 {
-  ApplicationContainer apps;
+        ApplicationContainer apps;
   for (NodeContainer::Iterator i = c.Begin (); i != c.End (); ++i)
     {
       Ptr<Node> node = *i;
@@ -85,6 +86,7 @@ P2PServerHelper::Install (NodeContainer c)
     }
   return apps;
 }
+
 
 Ptr<P2PServer>
 P2PServerHelper::GetServer (void)
