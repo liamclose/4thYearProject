@@ -39,6 +39,7 @@ public:
 
   P2PClient(std::vector<std::string> packets);
 
+  void PrintDataServed(int n);
   void ScheduleEvents(std::vector<std::string> events);
   virtual ~P2PClient ();
 
@@ -104,7 +105,7 @@ private:
   EventId m_sendEvent; //!< Event to send the next packet
   std::vector<std::string> m_packets;
   std::vector<std::string> m_data;
-  
+  int dataServed;
 
 
 };
