@@ -31,6 +31,7 @@ int sent = 0;
 
   std::map<std::string, std::vector<Address>> peers;
   std::set<std::string> cache;
+  std::list<uint32_t> respTime;
   int tcpPort = 2020;
   std::string file;
   bool m_running = true;
@@ -96,11 +97,12 @@ P2PClient::P2PClient ()
   m_dataRate =DataRate("2Mbps");
   m_packetSize = 512;
   m_socket_tcp = 0;
-  m_nPackets = 3000;
+  m_nPackets = 30;
   m_connected = false;
   m_packets = std::vector<std::string>(); 
   m_sendEvent = EventId ();
   dataServed = 0;
+  m_sentTime = 0;
 }
 
 P2PClient::P2PClient (std::vector<std::string> packets)
@@ -340,6 +342,9 @@ P2PClient::Send (void)
   std::copy (start, start+12, send);
   std::copy (file.c_str(), file.c_str()+file.size(), send+12);
   send[95]=1;
+  if (m_sentTime == 0) {
+    m_sentTime = Simulator::Now().GetNanoSeconds();
+  }
   Ptr<Packet> p = Create<Packet> (send, m_size-(8+4)); // 8+4 : the size of the seqTs header
   uint8_t *buffer = new uint8_t[m_size];
   p->CopyData(buffer, m_size);
@@ -468,7 +473,11 @@ std::string P2PClient::UpdatePeers(std::string received) {
           buffer[0] = 0;
           if (++m_tcpSent < m_nPackets) { //if we don't yet have all the data, request next bit
             ScheduleTx (socket, Create<Packet>(buffer, size));
-          } else { //otherwise set the expiry.
+          } else if (m_sentTime!=0){ //otherwise set the expiry.
+            NS_LOG_UNCOND("at: " << m_sentTime);
+            int totalTime = Simulator::Now().GetNanoSeconds() - m_sentTime;
+            m_sentTime = 0;
+            respTime.push_back(totalTime);
             Simulator::Schedule (Seconds (m_cacheTime), &P2PClient::ExpireCache, this, data);    
           }
         } else if (m_sent!=0){
@@ -577,5 +586,18 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
   void P2PClient::PrintDataServed(int totalFiles) {
     NS_LOG_UNCOND("Node: " << m_localIpv4 << " has served: " << dataServed << " data.");
     NS_LOG_UNCOND("Which is " << ((double) dataServed/(m_nPackets * totalFiles))*100 << " % of the requests " << dataTotal);
+    std::list<uint32_t>::iterator it;
+    int sum = 0;
+    double av = 0;
+    for (it = respTime.begin();it!=respTime.end();it++) {
+      sum = sum + *it;
+      NS_LOG_UNCOND("R time: " << *it);
+    }
+    if (respTime.size()!=0) {
+      av = sum / respTime.size();
+    }
+    NS_LOG_UNCOND("Average response time is: " << (double) av/1000000000);
+    NS_LOG_UNCOND("Max response time is: "  <<(double) (*std::max_element(respTime.begin(), respTime.end()))/1000000000);
+    NS_LOG_UNCOND("Minimum response time is: " << (double) (*std::min_element(respTime.begin(),respTime.end()))/1000000000);
   }
 }
