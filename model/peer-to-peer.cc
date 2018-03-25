@@ -587,11 +587,10 @@ void P2PClient::HandleRead (Ptr<Socket> socket) {
     NS_LOG_UNCOND("Node: " << m_localIpv4 << " has served: " << dataServed << " data.");
     NS_LOG_UNCOND("Which is " << ((double) dataServed/(m_nPackets * totalFiles))*100 << " % of the requests " << dataTotal);
     std::list<uint32_t>::iterator it;
-    int sum = 0;
+    uint128_t sum = 0;
     double av = 0;
     for (it = respTime.begin();it!=respTime.end();it++) {
       sum = sum + *it;
-      NS_LOG_UNCOND("R time: " << *it);
     }
     if (respTime.size()!=0) {
       av = sum / respTime.size();
