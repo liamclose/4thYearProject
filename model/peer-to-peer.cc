@@ -29,8 +29,7 @@ NS_LOG_COMPONENT_DEFINE ("P2PClient");
 int sent = 0;
 //sent = sent++;
 
-  std::map<std::string, std::vector<Address>> peers;
-  std::set<std::string> cache;
+
   std::list<uint32_t> respTime;
   int tcpPort = 2020;
   std::string file;
@@ -99,6 +98,8 @@ P2PClient::P2PClient ()
   m_socket_tcp = 0;
   m_nPackets = 30;
   m_connected = false;
+  //peers = std::map<std::string, std::vector<Address>>;
+  // cache = std::set<std::string>;
   m_packets = std::vector<std::string>(); 
   m_sendEvent = EventId ();
   dataServed = 0;
@@ -256,12 +257,12 @@ void P2PClient::HandleConnect (Ptr<Socket> socket)
   NS_LOG_FUNCTION (this << socket);
   socket->SetRecvCallback (MakeCallback (&P2PClient::HandleTcp, this));
   //m_socketList.push_back (s);
-    uint8_t buffer[1 + file.size()];
+    uint8_t buffer[2 + file.size()];
     std::fill(buffer, buffer+1+file.size(), 0x00);
   buffer[0] = 0;
   std::copy(file.c_str(), file.c_str()+file.size(), buffer+1);//check protocol
   //std::cout <<"sending: " << buffer << buffer+1 << "\n";
-  socket->Send(Create<Packet>(buffer, 2+file.size()));
+  socket->Send(Create<Packet>(buffer, 1+file.size()));
 
 }
  
@@ -453,6 +454,7 @@ std::string P2PClient::UpdatePeers(std::string received) {
       std::fill(buffer, buffer+size, 0x00);
       packet->CopyData(buffer, size);
       data = std::string((char*) buffer+1, size-1);
+      std::cout <<"filename: "  << data << "\n";
                                               //      data = data.substr(1,size);
         if (buffer[0]==0) {        
           //std::cout <<"File requested is: " << data <<"\n";
@@ -461,11 +463,11 @@ std::string P2PClient::UpdatePeers(std::string received) {
             packet = Create<Packet>(buffer, size);
             dataServed++;
             dataTotal++;
-            std::cout << "Serving response   ";
+            std::cout << "Serving response   " << data;
             std::cout << m_localIpv4 << "  " << dataServed << "\n";
           } else {
             buffer[0] = 2;
-            std::cout << "Don't have " << data << "\n";
+            std::cout << m_localIpv4 << m_mode<< "Don't have " << data << "\n";
             packet = Create<Packet>(buffer, size);
           }
           ScheduleTx (socket, Create<Packet>(buffer, size));
@@ -480,13 +482,13 @@ std::string P2PClient::UpdatePeers(std::string received) {
             int totalTime = Simulator::Now().GetNanoSeconds() - m_sentTime;
             m_sentTime = 0;
             respTime.push_back(totalTime);
-            NS_LOG_UNCOND("Setting expiry");
+            NS_LOG_UNCOND("Setting expiry" << Simulator::Now().GetSeconds());
             Simulator::Schedule (Seconds (m_cacheTime), &P2PClient::ExpireCache, this, data);    
           }
         } else if (m_sent!=0){
           std::cout << m_localIpv4 << "Expired Data\n" << buffer << "\n";
           m_running = false;
-          if (++m_tcpSent <m_nPackets) {
+          if (m_tcpSent <m_nPackets) {
             //m_tcpSent = 0;
             m_sent = prev -1;
             Simulator::Schedule (MilliSeconds (0.0), &P2PClient::Send, this);
@@ -498,19 +500,21 @@ std::string P2PClient::UpdatePeers(std::string received) {
   }
 
 void P2PClient::ExpireCache(std::string file) {
-  std::cout << "**************************************************************";
+  std::cout << "**************************************************************" << Simulator::Now().GetSeconds() << file << cache.count(file) << "\n";
         if (cache.size()>0) {
           cache.erase(file);
         } else {
           NS_LOG_ERROR("file does not exist");
           return;
         }
+        std::cout <<"now: " << cache.count(file) <<"\n";
                   std::stringstream peerAddressStringStream;
         uint8_t *buffer = new uint8_t[m_size-12];
       std::fill(buffer, buffer+m_size-12, 0x00);
         buffer[11] = 1;
         buffer[83] = 3;
         SeqTsHeader seqTs;
+        std::copy(file.c_str(), file.c_str()+file.size(), buffer+84);//check protocol
         Ptr<Packet> p = Create<Packet> (buffer, m_size-(8+4));
         p->AddHeader (seqTs);
          if ((m_socket->Send (p)) >= 0) {

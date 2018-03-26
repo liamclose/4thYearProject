@@ -94,6 +94,8 @@ private:
   uint32_t m_tcpSent;
   uint32_t m_nPackets;
   uint32_t m_totalRx;
+  std::map<std::string, std::vector<Address>> peers;
+    std::set<std::string> cache;
   bool m_connected;
   Ipv4Address m_localIpv4;
   std::list<Ptr<Socket> > m_socketList; //!< the accepted sockets

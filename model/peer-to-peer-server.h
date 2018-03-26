@@ -56,7 +56,7 @@ private:
   void Reply(ns3::Address from, ns3::Ptr<Packet> pckt);
   virtual void StartApplication (void);
   virtual void StopApplication (void);
-
+  void RemoveTorrent(Address from, std::string received);
   /**
    * \brief Handle a packet reception.
    *

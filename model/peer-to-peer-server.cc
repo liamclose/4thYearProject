@@ -102,8 +102,30 @@ P2PServer::GetReceived (void) const
      return message[11];
   }
 
+  
+  
+  void P2PServer::RemoveTorrent(Address from, std::string received) {
+    NS_LOG_FUNCTION(this);
+    std::cout << received << "doing a thing\n";
+    std::istringstream iss(received);
+    std::vector<std::string> parts(( std::istream_iterator<std::string>(iss)),
+				   std::istream_iterator<std::string>());
+    std::set<Address> a;
+    std::set<Address>::iterator it;
+    std::string filename = parts[0] + " " + parts[1];
+    if (torrents.count(filename)!=0) {
+      a = torrents.at(filename);
+      torrents.erase(filename);
+      std::cout << from << filename << "\n";
+      if (a.count(from)!=0) {
+	a.erase(from);
+      }
+      torrents.insert(std::pair<std::string, std::set<Address>>(filename, a));
+    }
+  }
+  
   std::string P2PServer::AddTorrentReturnPeers(Address from, std::string received) {
-     NS_LOG_FUNCTION(this);
+    NS_LOG_FUNCTION(this);
     std::istringstream iss(received);
     std::vector<std::string> parts(( std::istream_iterator<std::string>(iss)),
 				   std::istream_iterator<std::string>());
@@ -127,6 +149,7 @@ P2PServer::GetReceived (void) const
     //limit?
     std::string reply;
     reply += filename;
+    std::cout << "Server: " << filename << "\n";
     reply += " ";
     for (it = a.begin(); it != a.end(); it++) {
       std::ostringstream oss;
@@ -138,7 +161,9 @@ P2PServer::GetReceived (void) const
       reply += " ";
       reply += ss.str();
       reply += " ";
+      std::cout << "sigh" << reply <<"\n";
     }
+    std::cout << "????" << reply <<"\n";
     return reply;
   }
 
@@ -173,6 +198,8 @@ void P2PServer::Reply(Address from,Ptr<Packet> pckt) {
 
       send[0] = 1; //announce
       if (event==3) {
+	temp = std::string((char*) buffer+84);
+	RemoveTorrent(from,temp);
         return;
       } else if (event==2) {
       //TODO - change the stuff with the buffer add
