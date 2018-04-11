@@ -106,7 +106,6 @@ P2PServer::GetReceived (void) const
   
   void P2PServer::RemoveTorrent(Address from, std::string received) {
     NS_LOG_FUNCTION(this);
-    std::cout << received << "doing a thing\n";
     std::istringstream iss(received);
     std::vector<std::string> parts(( std::istream_iterator<std::string>(iss)),
 				   std::istream_iterator<std::string>());
@@ -116,7 +115,6 @@ P2PServer::GetReceived (void) const
     if (torrents.count(filename)!=0) {
       a = torrents.at(filename);
       torrents.erase(filename);
-      std::cout << from << filename << "\n";
       if (a.count(from)!=0) {
 	a.erase(from);
       }
@@ -149,7 +147,6 @@ P2PServer::GetReceived (void) const
     //limit?
     std::string reply;
     reply += filename;
-    std::cout << "Server: " << filename << "\n";
     reply += " ";
     for (it = a.begin(); it != a.end(); it++) {
       std::ostringstream oss;
@@ -161,9 +158,7 @@ P2PServer::GetReceived (void) const
       reply += " ";
       reply += ss.str();
       reply += " ";
-      std::cout << "sigh" << reply <<"\n";
     }
-    std::cout << "????" << reply <<"\n";
     return reply;
   }
 
