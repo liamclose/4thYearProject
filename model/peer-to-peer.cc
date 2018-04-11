@@ -238,7 +238,6 @@ void P2PClient::SetMessages(std::vector<std::string> messages) {
 void P2PClient::HandlePeerClose (Ptr<Socket> socket)
 {
   NS_LOG_FUNCTION (this << socket);
-  std::cout << "closing connection";
 }
  
 void P2PClient::HandlePeerError (Ptr<Socket> socket)
@@ -275,7 +274,6 @@ void P2PClient::HandleAccept (Ptr<Socket> s, const Address& from)
 void P2PClient::SetupTCPConnections(std::string filename) {
     NS_LOG_FUNCTION(this);
     std::vector<Address> a = peers.at(filename);
-    NS_LOG_INFO("Setting up tcp" << a.size() <<" " <<m_nPackets << m_localIpv4);
     for (uint i=0;i<a.size(); i++) {
        TypeId tid = TypeId::LookupByName ("ns3::TcpSocketFactory");
        Ptr<Socket> s2 = Socket::CreateSocket (GetNode (), tid);
@@ -321,7 +319,6 @@ P2PClient::Send (void)
   SeqTsHeader seqTs;
   seqTs.SetSeq (m_sent);
   uint8_t start[12] = {0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80, 0x00, 0x00, 0x00, 0x00};
-  NS_LOG_UNCOND(m_sent);
   if (m_sent==m_packets.size()) {
     return;
   }
@@ -454,15 +451,12 @@ std::string P2PClient::UpdatePeers(std::string received) {
           if (++m_tcpSent < m_nPackets) { //if we don't yet have all the data, request next bit
             ScheduleTx (socket, Create<Packet>(buffer, size));
           } else if (m_sentTime!=0){ //otherwise set the expiry.
-            NS_LOG_UNCOND("at: " << m_sentTime);
             int totalTime = Simulator::Now().GetNanoSeconds() - m_sentTime;
             m_sentTime = 0;
             respTime.push_back(totalTime);
-            NS_LOG_UNCOND("Setting expiry" << Simulator::Now().GetSeconds());
             Simulator::Schedule (Seconds (m_cacheTime), &P2PClient::ExpireCache, this, data);    
           }
         } else if (m_sent!=0){
-          std::cout << m_localIpv4 << "Expired Data\n" << buffer << "\n";
           m_running = false;
           if (m_tcpSent <m_nPackets) {
             //m_tcpSent = 0;

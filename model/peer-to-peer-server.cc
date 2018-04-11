@@ -313,9 +313,7 @@ void P2PServer::HandleRead (Ptr<Socket> socket)
           m_lossCounter.NotifyReceived (currentSequenceNumber);
           m_received++;
       	  Reply(from,packet);
-        } else {
-                NS_LOG_INFO("what the fuck"); 
-}
+        } 
     }
 }
 
